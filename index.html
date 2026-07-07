@@ -148,6 +148,15 @@
     font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--mustard);
     border:1px dashed var(--mustard-dim); padding:8px 10px; border-radius:2px; white-space:nowrap;
   }
+  .insight-filter-chip{
+    display:inline-flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:11px;
+    color:var(--paper-dim); background:var(--moss); padding:8px 10px; border-radius:2px; white-space:nowrap;
+  }
+  .insight-filter-chip b{ color:#fff; }
+  .insight-filter-chip .chip-x{ cursor:pointer; color:var(--paper); opacity:0.7; }
+  .insight-filter-chip .chip-x:hover{ opacity:1; }
+  .insight-clickable{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
+  .insight-clickable:hover{ color:var(--mustard); }
   .view-mode-toggle{ display:flex; border:1px solid var(--line-soft); border-radius:2px; overflow:hidden; }
   .view-mode-toggle button{
     background:var(--ink-soft); border:none; border-right:1px solid var(--line-soft); color:var(--line);
@@ -471,6 +480,9 @@
   .stat-card .val{ font-family:'Oswald',sans-serif; font-size:22px; color:var(--paper); margin-top:4px; line-height:1.15; }
   .stat-card .sub{ font-size:11px; color:var(--line); margin-top:3px; font-family:'IBM Plex Mono',monospace; }
   .stat-card.locked{ opacity:0.5; }
+  .stat-card.insight-clickable{ cursor:pointer; text-decoration:none; }
+  .stat-card.insight-clickable:hover{ border-color:var(--mustard-dim); background:rgba(216,165,29,0.08); }
+  .stat-card.insight-clickable:hover .val{ color:var(--mustard); }
 
   .insight-section{ margin-bottom:44px; }
   .insight-section h3{
@@ -570,7 +582,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.13</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.14</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -655,6 +667,7 @@
         <button data-mode="list" title="List view">☰</button>
       </div>
       <span class="count-tag" id="countTag">0 records</span>
+      <span class="insight-filter-chip" id="insightFilterChip" style="display:none;"></span>
       <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
     </div>
   </div>
@@ -694,7 +707,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.13</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.14</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -706,7 +719,7 @@
   let collection = [];            // your owned records
   let wantlist = [];               // your wantlist
   let filtered = [];
-  let filters = { format:null, genre:null, decade:null };
+  let filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
   let genreMode = 'style';         // 'genre' | 'style' | 'both'
   let viewMode = localStorage.getItem('cratespace:viewMode') || (matchMedia('(max-width:760px)').matches ? 'compact' : 'large');
   let searchTerm = "";
@@ -1169,6 +1182,14 @@
     return null;
   }
 
+  function matchesFormatMixValue(r, value){
+    if(!r.formats.includes('Vinyl')) return false;
+    const descs = r.formatDescriptions || [];
+    const matches = descs.filter(d=>TARGET_FORMATS.includes(d));
+    if(value === 'Vinyl (other)') return matches.length === 0;
+    return matches.includes(value);
+  }
+
   function applyFiltersAndSort(){
     const items = activeItems();
     filtered = items.filter(r=>{
@@ -1178,6 +1199,9 @@
         if(!r.year) return false;
         if(Math.floor(r.year/10)*10 !== filters.decade) return false;
       }
+      if(filters.formatDesc && !matchesFormatMixValue(r, filters.formatDesc)) return false;
+      if(filters.country && enrichCache[r.id]?.country !== filters.country) return false;
+      if(filters.creditId && !(enrichCache[r.id]?.credits||[]).some(c=>c.id===filters.creditId)) return false;
       if(searchTerm){
         const hay = `${r.artistDisplay} ${r.title} ${r.labels.map(l=>l.name).join(' ')} ${r.catno} ${r.genres.join(' ')} ${r.styles.join(' ')}`.toLowerCase();
         if(!hay.includes(searchTerm)) return false;
@@ -1328,15 +1352,18 @@
 
     formatTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       filters.format = (filters.format === t.dataset.val) ? null : t.dataset.val;
+      setInsightFilterChip(null);
       buildTabs(); render(); closeFiltersDrawer();
     }));
     genreTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       filters.genre = (filters.genre === t.dataset.val) ? null : t.dataset.val;
+      setInsightFilterChip(null);
       buildTabs(); render(); closeFiltersDrawer();
     }));
     decadeTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       const v = Number(t.dataset.val);
       filters.decade = (filters.decade === v) ? null : v;
+      setInsightFilterChip(null);
       buildTabs(); render(); closeFiltersDrawer();
     }));
   }
@@ -1631,6 +1658,53 @@
     tabGaps.classList.remove('active');
     tabInsights.classList.remove('active');
     render();
+  }
+
+  // Every clickable piece of metadata in Insights routes through here — always
+  // lands on the Crate (collection) view, since Insights is scoped to your
+  // collection, not the wantlist.
+  function goToCrateWithFilter(opts){
+    opts = opts || {};
+    activeDataset = 'crate';
+    tabCrate.classList.add('active');
+    tabWant.classList.remove('active');
+    filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
+    searchTerm = ''; searchInput.value = '';
+    if(opts.genreModeValue){
+      genreMode = opts.genreModeValue;
+      genreModeToggle.querySelectorAll('button').forEach(b=> b.classList.toggle('active', b.dataset.mode === genreMode));
+    }
+    if(opts.genre) filters.genre = opts.genre;
+    if(opts.decade != null) filters.decade = opts.decade;
+    if(opts.format) filters.format = opts.format;
+    if(opts.formatDesc) filters.formatDesc = opts.formatDesc;
+    if(opts.country) filters.country = opts.country;
+    if(opts.creditId) filters.creditId = opts.creditId;
+    if(opts.search){ searchTerm = opts.search.toLowerCase(); searchInput.value = opts.search; }
+    setInsightFilterChip(opts.label || null);
+    showBrowseView();
+    buildTabs();
+    updateValueBar();
+    render();
+  }
+
+  function setInsightFilterChip(label){
+    const chip = el('insightFilterChip');
+    if(!chip) return;
+    if(label){
+      chip.style.display = 'inline-flex';
+      chip.innerHTML = `Filtered from Insights: <b>${escapeHtml(label)}</b> <span class="chip-x" id="insightFilterClear">✕</span>`;
+      const clearBtn = el('insightFilterClear');
+      if(clearBtn) clearBtn.addEventListener('click', ()=>{
+        filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
+        searchTerm = ''; searchInput.value = '';
+        setInsightFilterChip(null);
+        buildTabs(); render();
+      });
+    }else{
+      chip.style.display = 'none';
+      chip.innerHTML = '';
+    }
   }
 
   async function openArtistView(id, name){
@@ -2036,6 +2110,28 @@
     };
   }
 
+  function ic(text, kind, value, label){
+    return `<span class="insight-clickable" data-ik="${kind}" data-iv="${escapeHtml(String(value))}"${label?` data-ilabel="${escapeHtml(label)}"`:''}>${text}</span>`;
+  }
+  function wireInsightClicks(container){
+    container.querySelectorAll('.insight-clickable').forEach(node=>{
+      node.addEventListener('click', ()=>{
+        const kind = node.dataset.ik, value = node.dataset.iv, label = node.dataset.ilabel || value;
+        switch(kind){
+          case 'artist': goToCrateWithFilter({ search:value, label:`Artist — ${value}` }); break;
+          case 'label': goToCrateWithFilter({ search:value, label:`Label — ${value}` }); break;
+          case 'genre': goToCrateWithFilter({ genre:value, genreModeValue:'genre', label:`Genre — ${value}` }); break;
+          case 'style': goToCrateWithFilter({ genre:value, genreModeValue:'style', label:`Style — ${value}` }); break;
+          case 'decade': goToCrateWithFilter({ decade:Number(value), label:`Decade — ${value}s` }); break;
+          case 'title': goToCrateWithFilter({ search:value, label:`Title — ${value}` }); break;
+          case 'formatDesc': goToCrateWithFilter({ formatDesc:value, label:`Format — ${value}` }); break;
+          case 'country': goToCrateWithFilter({ country:value, label:`Pressing country — ${value}` }); break;
+          case 'credit': goToCrateWithFilter({ creditId:Number(value), label:`Credit — ${label}` }); break;
+        }
+      });
+    });
+  }
+
   function buildNarrative(s){
     const paras = [];
     const vinylCount = s.topFormatMap['Vinyl']||0;
@@ -2045,29 +2141,30 @@
     if(vinylCount) p1 += ` — <b>${pct(vinylCount,s.total)}%</b> of it on vinyl`;
     if(lp||seven||twelve||box){
       const parts=[];
-      if(lp) parts.push(`${pct(lp,vinylCount)}% LP`);
-      if(seven) parts.push(`${pct(seven,vinylCount)}% 7"`);
-      if(twelve) parts.push(`${pct(twelve,vinylCount)}% 12"`);
-      if(box) parts.push(`${pct(box,vinylCount)}% box sets`);
+      if(lp) parts.push(`${ic(pct(lp,vinylCount)+'% LP','formatDesc','LP')}`);
+      if(seven) parts.push(`${ic(pct(seven,vinylCount)+'% 7"','formatDesc','7"')}`);
+      if(twelve) parts.push(`${ic(pct(twelve,vinylCount)+'% 12"','formatDesc','12"')}`);
+      if(box) parts.push(`${ic(pct(box,vinylCount)+'% box sets','formatDesc','Box Set')}`);
       p1 += `, split roughly ${parts.join(', ')}`;
     }
     paras.push(p1 + '.');
 
     if(s.topArtist){
-      paras.push(`<b>${escapeHtml(s.topArtist.name)}</b> is your most-collected artist, with <b>${s.topArtist.count}</b> release${s.topArtist.count===1?'':'s'} — about ${pct(s.topArtist.count,s.total)}% of your entire shelf.`);
+      paras.push(`${ic(`<b>${escapeHtml(s.topArtist.name)}</b>`,'artist',s.topArtist.name)} is your most-collected artist, with <b>${s.topArtist.count}</b> release${s.topArtist.count===1?'':'s'} — about ${pct(s.topArtist.count,s.total)}% of your entire shelf.`);
     }
     if(s.topDecade || s.topGenre || s.topStyle){
       const bits=[];
-      if(s.topDecade) bits.push(`<b>${s.topDecade[0]}s</b> pressings (${pct(s.topDecade[1],s.total)}%)`);
-      if(s.topGenre) bits.push(`<b>${escapeHtml(s.topGenre[0])}</b> as a genre`);
-      if(s.topStyle) bits.push(`<b>${escapeHtml(s.topStyle[0])}</b> as the style you actually reach for most`);
+      if(s.topDecade) bits.push(`${ic(`<b>${s.topDecade[0]}s</b> pressings`,'decade',s.topDecade[0])} (${pct(s.topDecade[1],s.total)}%)`);
+      if(s.topGenre) bits.push(`${ic(`<b>${escapeHtml(s.topGenre[0])}</b>`,'genre',s.topGenre[0])} as a genre`);
+      if(s.topStyle) bits.push(`${ic(`<b>${escapeHtml(s.topStyle[0])}</b>`,'style',s.topStyle[0])} as the style you actually reach for most`);
       paras.push(`You lean hardest into ${bits.join(', and ')}.`);
     }
     if(s.topLabel){
-      paras.push(`<b>${escapeHtml(s.topLabel.name)}</b> is the label you keep coming back to, with <b>${s.topLabel.count}</b> releases in your crate.`);
+      paras.push(`${ic(`<b>${escapeHtml(s.topLabel.name)}</b>`,'label',s.topLabel.name)} is the label you keep coming back to, with <b>${s.topLabel.count}</b> releases in your crate.`);
     }
     if(s.oldest && s.newest){
-      paras.push(`Your oldest pressing dates to <b>${s.oldest.year}</b> (${escapeHtml(s.oldest.title)} by ${escapeHtml(s.oldest.artistDisplay)}); your newest catch is from <b>${s.newest.year}</b>.`);
+      const oldDecade = Math.floor(s.oldest.year/10)*10, newDecade = Math.floor(s.newest.year/10)*10;
+      paras.push(`Your oldest pressing dates to ${ic(`<b>${s.oldest.year}</b>`,'decade',oldDecade)} (${ic(escapeHtml(s.oldest.title),'title',s.oldest.title)} by ${ic(escapeHtml(s.oldest.artistDisplay),'artist',s.oldest.artistDisplay)}); your newest catch is from ${ic(`<b>${s.newest.year}</b>`,'decade',newDecade)}.`);
     }
     if(s.firstAdded){
       const fmtShort = iso => new Date(iso).toLocaleDateString(undefined,{ year:'numeric', month:'long' });
@@ -2078,7 +2175,7 @@
     if(s.priced){
       const top = s.topValuable[0];
       let p = `Priced items alone are worth an estimated <b>${fmtMoney(s.valueSum,s.currency)}</b> (based on ${s.priced} of ${s.total} records)`;
-      if(top) p += `, led by <b>${escapeHtml(top.r.title)}</b> by ${escapeHtml(top.r.artistDisplay)} at ${fmtMoney(top.amount, top.currency)}`;
+      if(top) p += `, led by ${ic(`<b>${escapeHtml(top.r.title)}</b>`,'title',top.r.title)} by ${ic(escapeHtml(top.r.artistDisplay),'artist',top.r.artistDisplay)} at ${fmtMoney(top.amount, top.currency)}`;
       paras.push(p + '.');
     }else{
       paras.push(`<span class="locked">Estimate some values from the My Crate view to unlock value-based insights here.</span>`);
@@ -2096,7 +2193,7 @@
       if(s.topCredits.length){
         const c = s.topCredits[0];
         const roleStr = c.roles.size ? [...c.roles].slice(0,2).join('/') : 'credited';
-        paras.push(`Here's one you probably didn't clock: <b>${escapeHtml(c.name)}</b> shows up as ${escapeHtml(roleStr)} on <b>${c.count}</b> of your records — more connective tissue running through your shelf than any single headline artist besides ${s.topArtist?escapeHtml(s.topArtist.name):'your top artist'}.`);
+        paras.push(`Here's one you probably didn't clock: ${ic(`<b>${escapeHtml(c.name)}</b>`,'credit',c.id,c.name)} shows up as ${escapeHtml(roleStr)} on <b>${c.count}</b> of your records — more connective tissue running through your shelf than any single headline artist besides ${s.topArtist?ic(escapeHtml(s.topArtist.name),'artist',s.topArtist.name):'your top artist'}.`);
       }
     }else{
       paras.push(`<span class="locked">Run "Enrich my collection" below to unlock total playtime, pressing countries, and hidden-collaborator insights.</span>`);
@@ -2139,11 +2236,11 @@
       { lab:'Total records', val:s.total },
       { lab:'Artists', val:s.artistCount },
       { lab:'Labels', val:s.labelCount },
-      { lab:'Top artist', val:s.topArtist?s.topArtist.name:'—', sub:s.topArtist?`${s.topArtist.count} releases`:'' },
-      { lab:'Top decade', val:s.topDecade?`${s.topDecade[0]}s`:'—', sub:s.topDecade?`${s.topDecade[1]} records`:'' },
-      { lab:'Top genre', val:s.topGenre?s.topGenre[0]:'—' },
-      { lab:'Oldest pressing', val:s.oldest?s.oldest.year:'—' },
-      { lab:'Newest addition', val:s.newest?s.newest.year:'—' }
+      { lab:'Top artist', val:s.topArtist?s.topArtist.name:'—', sub:s.topArtist?`${s.topArtist.count} releases`:'', click:s.topArtist?{ik:'artist', iv:s.topArtist.name}:null },
+      { lab:'Top decade', val:s.topDecade?`${s.topDecade[0]}s`:'—', sub:s.topDecade?`${s.topDecade[1]} records`:'', click:s.topDecade?{ik:'decade', iv:s.topDecade[0]}:null },
+      { lab:'Top genre', val:s.topGenre?s.topGenre[0]:'—', click:s.topGenre?{ik:'genre', iv:s.topGenre[0]}:null },
+      { lab:'Oldest pressing', val:s.oldest?s.oldest.year:'—', click:s.oldest?{ik:'decade', iv:Math.floor(s.oldest.year/10)*10}:null },
+      { lab:'Newest addition', val:s.newest?s.newest.year:'—', click:s.newest?{ik:'decade', iv:Math.floor(s.newest.year/10)*10}:null }
     ];
     if(s.priced) statCards.push({ lab:'Est. crate value', val:fmtMoney(s.valueSum,s.currency), sub:`${s.priced} of ${s.total} priced` });
     if(s.enrichedCount && s.totalDurationSec){
@@ -2152,9 +2249,10 @@
     }
     if(s.avgHave!=null) statCards.push({ lab:'Avg. community "have"', val:Math.round(s.avgHave), sub:'lower = more obscure' });
 
-    const statCardsHtml = statCards.map(c=>`
-      <div class="stat-card"><div class="lab">${escapeHtml(c.lab)}</div><div class="val">${escapeHtml(String(c.val))}</div>${c.sub?`<div class="sub">${escapeHtml(c.sub)}</div>`:''}</div>
-    `).join('');
+    const statCardsHtml = statCards.map(c=>{
+      const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="stat-card"';
+      return `<div${clickAttrs}><div class="lab">${escapeHtml(c.lab)}</div><div class="val">${escapeHtml(String(c.val))}</div>${c.sub?`<div class="sub">${escapeHtml(c.sub)}</div>`:''}</div>`;
+    }).join('');
 
     const enrichHtml = `
       <div class="enrich-panel">
@@ -2196,7 +2294,7 @@
             <h4>Most valuable records</h4>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th>Artist</th><th style="text-align:right;">Est. value</th></tr></thead>
-              <tbody>${s.topValuable.map(v=>`<tr><td>${escapeHtml(v.r.title)}</td><td>${escapeHtml(v.r.artistDisplay)}</td><td class="num">${fmtMoney(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
+              <tbody>${s.topValuable.map(v=>`<tr><td>${ic(escapeHtml(v.r.title),'title',v.r.title)}</td><td>${ic(escapeHtml(v.r.artistDisplay),'artist',v.r.artistDisplay)}</td><td class="num">${fmtMoney(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
             </table>
           </div>
         </div>
@@ -2211,7 +2309,7 @@
             <h4>Most-credited names on your shelf (besides headline artists)</h4>
             <table class="leaderboard">
               <thead><tr><th>Name</th><th>Role(s)</th><th style="text-align:right;">Records</th></tr></thead>
-              <tbody>${s.topCredits.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml([...c.roles].slice(0,3).join(', '))}</td><td class="num">${c.count}</td></tr>`).join('')}</tbody>
+              <tbody>${s.topCredits.map(c=>`<tr><td class="insight-clickable" data-ik="credit" data-iv="${c.id}" data-ilabel="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td><td>${escapeHtml([...c.roles].slice(0,3).join(', '))}</td><td class="num">${c.count}</td></tr>`).join('')}</tbody>
             </table>
           </div>` : ''}
         </div>
@@ -2242,6 +2340,7 @@
       renderInsightsView();
     });
 
+    wireInsightClicks(insightsView);
     drawInsightCharts(s);
   }
 
@@ -2256,25 +2355,42 @@
       if(wrap) wrap.style.height = Math.max(180, count*28+24) + 'px';
     }
 
+    function chartClick(action){
+      return (evt, elements) => { if(elements.length) action(elements[0].index); };
+    }
+
     const formatEntries = Object.entries(s.formatMixMap).sort((a,b)=>b[1]-a[1]);
     makeChart('chartFormat', {
       type:'doughnut',
       data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#16130f', borderWidth:2 }] },
-      options:{ plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10} } } } }
+      options:{
+        onClick: chartClick(i => { const v = formatEntries[i][0]; goToCrateWithFilter({ formatDesc:v, label:`Format — ${v}` }); }),
+        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
+        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10} } } }
+      }
     });
 
     sizeTallWrap('chartStylesWrap', s.topStylesList.length);
     makeChart('chartStyles', {
       type:'bar',
       data:{ labels:s.topStylesList.map(e=>e[0]), datasets:[{ data:s.topStylesList.map(e=>e[1]), backgroundColor:'#d8a51d' }] },
-      options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } } }
+      options:{
+        indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+        onClick: chartClick(i => { const v = s.topStylesList[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'style', label:`Style — ${v}` }); }),
+        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
     });
 
     const decadeEntries = Object.entries(s.decadeMapAll).sort((a,b)=>Number(a[0])-Number(b[0]));
     makeChart('chartDecades', {
       type:'bar',
       data:{ labels:decadeEntries.map(e=>e[0]+'s'), datasets:[{ data:decadeEntries.map(e=>e[1]), backgroundColor:'#9a3324' }] },
-      options:{ plugins:{legend:{display:false}}, scales:{ y:{ ticks:{precision:0} } } }
+      options:{
+        plugins:{legend:{display:false}}, scales:{ y:{ ticks:{precision:0} } },
+        onClick: chartClick(i => { const v = Number(decadeEntries[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
     });
 
     const topLabels = [...s.labelMapAll.values()].sort((a,b)=>b.count-a.count).slice(0,10);
@@ -2282,7 +2398,12 @@
     makeChart('chartLabels', {
       type:'bar',
       data:{ labels:topLabels.map(l=>l.name), datasets:[{ data:topLabels.map(l=>l.count), backgroundColor:'#49603f' }] },
-      options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } } }
+      options:{
+        indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+        onClick: chartClick(i => { const v = topLabels[i].name; goToCrateWithFilter({ search:v, label:`Label — ${v}` }); }),
+        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+      }
     });
 
     const months = [...s.addedByMonth.keys()].sort();
@@ -2297,13 +2418,21 @@
       makeChart('chartValueGenre', {
         type:'bar',
         data:{ labels:genreVals.map(e=>e[0]), datasets:[{ data:genreVals.map(e=>Math.round(e[1])), backgroundColor:'#d8a51d' }] },
-        options:{ indexAxis:'y', plugins:{legend:{display:false}} }
+        options:{
+          indexAxis:'y', plugins:{legend:{display:false}},
+          onClick: chartClick(i => { const v = genreVals[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
+          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        }
       });
       const decVals = Object.entries(s.valueByDecade).sort((a,b)=>Number(a[0])-Number(b[0]));
       makeChart('chartValueDecade', {
         type:'bar',
         data:{ labels:decVals.map(e=>e[0]+'s'), datasets:[{ data:decVals.map(e=>Math.round(e[1])), backgroundColor:'#9a3324' }] },
-        options:{ plugins:{legend:{display:false}} }
+        options:{
+          plugins:{legend:{display:false}},
+          onClick: chartClick(i => { const v = Number(decVals[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        }
       });
     }
 
@@ -2313,7 +2442,12 @@
       makeChart('chartCountries', {
         type:'bar',
         data:{ labels:countryEntries.map(e=>e[0]), datasets:[{ data:countryEntries.map(e=>e[1]), backgroundColor:'#49603f' }] },
-        options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{autoSkip:false} } } }
+        options:{
+          indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+          scales:{ y:{ ticks:{autoSkip:false} } },
+          onClick: chartClick(i => { const v = countryEntries[i][0]; goToCrateWithFilter({ country:v, label:`Pressing country — ${v}` }); }),
+          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        }
       });
     }
   }
@@ -2453,8 +2587,9 @@
     activeDataset = ds;
     tabCrate.classList.toggle('active', ds==='crate');
     tabWant.classList.toggle('active', ds==='wantlist');
-    filters = { format:null, genre:null, decade:null };
+    filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
     searchInput.value = ''; searchTerm = '';
+    setInsightFilterChip(null);
     showBrowseView();
     buildTabs();
     updateValueBar();
@@ -2521,7 +2656,7 @@
         : (newItems.length
             ? `Synced just now · <b>${newItems.length}</b> new record${newItems.length===1?'':'s'} found (now <b>${merged.length}</b> total).`
             : `No new records found · still <b>${merged.length}</b> total.`);
-      filters = { format:null, genre:null, decade:null };
+      filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
       searchInput.value = ''; searchTerm = '';
       switchDataset('crate');
       refreshNav(); buildTabs(); updateValueBar(); render();
@@ -2906,6 +3041,7 @@
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(()=>{
       searchTerm = searchInput.value.trim().toLowerCase();
+      setInsightFilterChip(null);
       render();
     }, 150);
   });
@@ -2916,7 +3052,8 @@
   filtersCloseBtn.addEventListener('click', closeFiltersDrawer);
 
   clearFiltersBtn.addEventListener('click', ()=>{
-    filters = { format:null, genre:null, decade:null };
+    filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
+    setInsightFilterChip(null);
     buildTabs(); render();
     closeFiltersDrawer();
   });
