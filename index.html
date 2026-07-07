@@ -108,10 +108,12 @@
 
     .value-bar{ padding:10px 12px; flex-direction:column; align-items:stretch; gap:8px; }
     .value-bar-toggle{
-      display:flex; align-items:center; justify-content:space-between; width:100%;
+      display:flex; align-items:center; gap:8px; width:100%;
       background:none; border:none; color:var(--line); font-family:'IBM Plex Mono',monospace;
       font-size:11px; padding:0; cursor:pointer;
     }
+    .value-bar-toggle .chev{ display:inline-block; color:var(--mustard); font-size:9px; transition:transform .15s ease; }
+    .value-bar.tools-open .value-bar-toggle .chev{ transform:rotate(-90deg); }
     .value-bar-controls{ display:none; flex-direction:column; align-items:stretch; gap:10px; }
     .value-bar.tools-open .value-bar-controls{ display:flex; }
     .value-bar .progress{ min-width:0; }
@@ -142,15 +144,20 @@
   .nav-tab.active{ color:var(--mustard); border-color:var(--mustard-dim); background:var(--ink-soft); }
   .nav-tab .n{ color:var(--line); font-family:'IBM Plex Mono',monospace; font-size:10.5px; margin-left:4px; }
 
+  .toolbar{ padding:16px calc(28px + env(safe-area-inset-right)) 0 calc(28px + env(safe-area-inset-left)); }
+
   .value-bar{
-    display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:14px;
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:0;
     padding:12px 14px; background:var(--ink-soft); border:1px dashed var(--mustard-dim); border-radius:2px;
   }
-  .value-bar .stat{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--paper-dim); }
-  .value-bar .stat b{ color:var(--mustard); font-size:15px; }
-  .value-bar .stat .sub{ color:var(--line); font-size:10.5px; display:block; margin-top:2px; }
+  .value-bar-toggle{
+    background:none; border:none; color:var(--paper-dim); font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px; padding:0; cursor:default; text-align:left;
+  }
+  .value-bar-toggle b{ color:var(--mustard); font-size:15px; }
+  .value-bar-toggle .sub{ color:var(--line); font-size:10.5px; margin-left:6px; }
+  .value-bar-toggle .chev{ display:none; }
   .value-bar .progress{ font-size:11px; color:var(--line); flex:1; min-width:180px; }
-  .value-bar-toggle{ display:none; }
   .value-bar-controls{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; flex:1; }
   .assume-label{
     font-size:11px; color:var(--line); display:flex; align-items:center; gap:6px;
@@ -559,7 +566,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.9</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.10</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -588,15 +595,18 @@
   </div>
 
   <div class="nav-tabs" id="navTabs" style="display:none;">
-    <button class="nav-tab active" id="tabCrate" data-dataset="crate">My Crate <span class="n" id="crateCount">0</span></button>
+    <button class="nav-tab active" id="tabCrate" data-dataset="crate">Crate <span class="n" id="crateCount">0</span></button>
     <button class="nav-tab" id="tabWant" data-dataset="wantlist">Wantlist <span class="n" id="wantCount">0</span></button>
-    <button class="nav-tab" id="tabGaps">Fill the Gaps <span class="n" id="gapsCount">0</span></button>
+    <button class="nav-tab" id="tabGaps">Gaps <span class="n" id="gapsCount">0</span></button>
     <button class="nav-tab" id="tabInsights">Insights</button>
   </div>
+</header>
 
+<div class="toolbar" id="toolbar">
   <div class="value-bar" id="valueBar" style="display:none;">
-    <div class="stat">Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span></div>
-    <button class="value-bar-toggle" id="valueBarToggle" title="Value tools">⚙ Tools</button>
+    <button class="value-bar-toggle" id="valueBarToggle">
+      <span class="chev">▾</span> Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span>
+    </button>
     <div class="value-bar-controls" id="valueBarControls">
       <label class="assume-label" title="Records with a known condition on Discogs always use their own condition's price. This only applies to records with no condition on record.">
         Assume condition:
@@ -644,7 +654,7 @@
       <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
     </div>
   </div>
-</header>
+</div>
 
 <div class="layout" id="layout" style="display:none;">
   <aside class="dividers">
@@ -680,7 +690,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.9</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.10</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
