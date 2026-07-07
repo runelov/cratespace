@@ -94,42 +94,6 @@
   .setup-panel{ margin-top:14px; }
   .setup-panel.collapsed{ display:none; }
 
-  @media (max-width:760px){
-    header.top{ padding-top:calc(14px + env(safe-area-inset-top)); padding-bottom:10px; }
-    .brand h1{ font-size:26px; }
-    .brand small{ font-size:9.5px; letter-spacing:0.06em; }
-    .top-row{ align-items:center; }
-    .sync-note{ font-size:10.5px; }
-
-    .nav-tabs{
-      margin-top:10px; display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;
-    }
-    .nav-tab{
-      padding:8px 3px; font-size:9.5px; letter-spacing:0.01em; flex-shrink:0;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
-    }
-    .nav-tab .n{ font-size:9px; margin-left:2px; }
-
-    .value-bar{ padding:10px 12px; flex-direction:column; align-items:stretch; gap:8px; }
-    .value-bar-toggle{
-      display:flex; align-items:center; gap:8px; width:100%;
-      background:none; border:none; color:var(--line); font-family:'IBM Plex Mono',monospace;
-      font-size:11px; padding:0; cursor:pointer;
-    }
-    .value-bar-toggle .chev{ display:inline-block; color:var(--mustard); font-size:9px; transition:transform .15s ease; }
-    .value-bar.tools-open .value-bar-toggle .chev{ transform:rotate(-90deg); }
-    .value-bar-controls{ display:none; flex-direction:column; align-items:stretch; gap:10px; }
-    .value-bar.tools-open .value-bar-controls{ display:flex; }
-    .value-bar .progress{ min-width:0; }
-
-    .search-row{ margin-top:10px; flex-direction:column; align-items:stretch; }
-    .search-row-controls{
-      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-      padding-bottom:2px;
-    }
-    .search-row-controls::-webkit-scrollbar{ display:none; }
-    .search-row-controls > *{ flex-shrink:0; }
-  }
   .sync-note b{ color:var(--paper-dim); }
   .filters-toggle-btn{ display:none; }
   .filters-close-btn{
@@ -544,6 +508,41 @@
   .leaderboard tr:hover td{ background:rgba(216,165,29,0.05); }
 
   @media (max-width:760px){
+    header.top{ padding-top:calc(14px + env(safe-area-inset-top)); padding-bottom:10px; }
+    .brand h1{ font-size:26px; }
+    .brand small{ font-size:9.5px; letter-spacing:0.06em; }
+    .top-row{ align-items:center; }
+    .sync-note{ font-size:10.5px; }
+
+    .nav-tabs{
+      margin-top:10px; display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;
+    }
+    .nav-tab{
+      padding:8px 3px; font-size:9.5px; letter-spacing:0.01em; flex-shrink:0;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
+    }
+    .nav-tab .n{ font-size:9px; margin-left:2px; }
+
+    .value-bar{ padding:10px 12px; flex-direction:column; align-items:stretch; gap:8px; }
+    .value-bar-toggle{
+      display:flex; align-items:center; gap:8px; width:100%;
+      background:none; border:none; color:var(--line); font-family:'IBM Plex Mono',monospace;
+      font-size:11px; padding:0; cursor:pointer;
+    }
+    .value-bar-toggle .chev{ display:inline-block; color:var(--mustard); font-size:9px; transition:transform .15s ease; }
+    .value-bar.tools-open .value-bar-toggle .chev{ transform:rotate(-90deg); }
+    .value-bar-controls{ display:none; flex-direction:column; align-items:stretch; gap:10px; }
+    .value-bar.tools-open .value-bar-controls{ display:flex; }
+    .value-bar .progress{ min-width:0; }
+
+    .search-row{ margin-top:10px; flex-direction:column; align-items:stretch; }
+    .search-row-controls{
+      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+      padding-bottom:2px;
+    }
+    .search-row-controls::-webkit-scrollbar{ display:none; }
+    .search-row-controls > *{ flex-shrink:0; }
+
     .layout{ flex-direction:column; }
     .divider-group{ margin-bottom:0; }
     .filters-toggle-btn{ display:inline-flex; }
@@ -571,7 +570,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.12</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.13</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -695,7 +694,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.12</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.13</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
