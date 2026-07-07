@@ -2344,7 +2344,9 @@
       if(resp.status === 401) msg = 'GitHub rejected the token — check it\'s valid and not expired.';
       if(resp.status === 403) msg = 'GitHub denied that request — check the token has "Contents: Read and write" permission on this repo.';
       if(resp.status === 404) msg = `Repo, branch, or path not found — check "${ghRepo.value.trim()}" is correct and the token can see it.`;
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = resp.status;
+      throw err;
     }
     return resp.status === 204 ? null : resp.json();
   }
@@ -2369,8 +2371,11 @@
     try{
       refData = await githubApiFetch(`${api}/git/ref/heads/${encodeURIComponent(branch)}`);
     }catch(err){
-      if(!/not found/i.test(err.message)) throw err;
-      // Branch doesn't exist yet — brand-new empty repo, handled below.
+      // A brand-new repo with zero commits has no branches yet. GitHub reports
+      // this inconsistently — sometimes a plain 404, sometimes a 409 with
+      // "Git Repository is empty." — so check the status code, not the wording.
+      if(err.status !== 404 && err.status !== 409) throw err;
+      // Handled below: bootstrap the first commit and create the branch.
     }
 
     onProgress && onProgress('Uploading backup blob…');
