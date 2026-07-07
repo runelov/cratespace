@@ -56,6 +56,8 @@
   .brand h1{ font-size:32px; margin:0; font-weight:700; color:var(--paper); }
   .brand h1 span{ color:var(--mustard); }
   .brand small{ font-size:11px; letter-spacing:0.12em; color:var(--line); text-transform:uppercase; }
+  .build-tag{ color:var(--mustard); font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em; }
+  #buildStamp{ color:var(--mustard); }
 
   .sync-panel{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12px; }
   .sync-panel input{
@@ -440,7 +442,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs</small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.1</span></small>
     </div>
     <div>
       <div class="sync-panel">
@@ -545,7 +547,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.1</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
