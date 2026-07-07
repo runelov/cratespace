@@ -57,6 +57,7 @@
   const valueBarToggle = el('valueBarToggle');
   const viewModeToggle = el('viewModeToggle');
   const assumedConditionSelect = el('assumedConditionSelect');
+  const displayCurrencySelect = el('displayCurrencySelect');
   const searchRow = el('searchRow');
   const layout = el('layout');
   const grid = el('grid');
@@ -152,6 +153,15 @@
     enrichCache = loadJSON('cratespace:enrich') || {};
     const savedCondition = loadJSON('cratespace:assumedCondition');
     if(savedCondition) assumedConditionSelect.value = savedCondition;
+    displayCurrencySelect.value = displayCurrency;
+    ensureFxRates().then(()=>{
+      if(displayCurrency === 'auto') return;
+      updateValueBar();
+      if(currentView.type === 'browse') render();
+      else if(currentView.type === 'gaps') renderGapsView();
+      else if(currentView.type === 'insights') renderInsightsView();
+      else if(currentView.type === 'artist' || currentView.type === 'label') refreshAfterMutation();
+    });
   }
   function savePriceCache(){ saveJSON('cratespace:prices', priceCache); }
   function saveMarketCache(){ saveJSON('cratespace:market', marketCache); }
@@ -165,8 +175,46 @@
       ' ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
   }
   function fmtMoney(value, currency){
-    try{ return new Intl.NumberFormat(undefined, { style:'currency', currency: currency || 'USD', maximumFractionDigits: value < 20 ? 2 : 0 }).format(value); }
-    catch(e){ return `${currency||''} ${value.toFixed(2)}`.trim(); }
+    try{ return new Intl.NumberFormat(undefined, { style:'currency', currency: currency || 'USD', maximumFractionDigits:0, minimumFractionDigits:0 }).format(value); }
+    catch(e){ return `${currency||''} ${Math.round(value)}`.trim(); }
+  }
+
+  // ---------- display currency & conversion ----------
+  // Discogs' price suggestions come back in whatever currency the token's
+  // account uses — that's the "auto" mode below, and needs no conversion.
+  // Anything else is converted using ECB reference rates (via the free,
+  // keyless Frankfurter API), cached locally for a day at a time.
+  let displayCurrency = localStorage.getItem('cratespace:displayCurrency') || 'NOK';
+  let fxRates = null;
+  async function ensureFxRates(){
+    const dayMs = 24*60*60*1000;
+    const cached = loadJSON('cratespace:fxRates');
+    if(cached && cached.rates && (Date.now() - cached.fetchedAt < dayMs)){
+      fxRates = cached;
+      return;
+    }
+    try{
+      const resp = await fetch('https://api.frankfurter.app/latest?from=EUR');
+      if(!resp.ok) throw new Error('bad response');
+      const data = await resp.json();
+      fxRates = { rates: Object.assign({ EUR:1 }, data.rates), fetchedAt: Date.now() };
+      saveJSON('cratespace:fxRates', fxRates);
+    }catch(e){
+      if(cached) fxRates = cached; // stale is better than nothing
+    }
+  }
+  function convertCurrency(amount, from, to){
+    if(!from || !to || from === to || !fxRates || !fxRates.rates) return { amount, currency: from || to };
+    const rFrom = fxRates.rates[from], rTo = fxRates.rates[to];
+    if(!rFrom || !rTo) return { amount, currency: from }; // unsupported currency code — show source as-is
+    return { amount: amount / rFrom * rTo, currency: to };
+  }
+  // The one function almost everywhere in the UI should call for a user-facing amount.
+  function fmtMoneyDisplay(value, sourceCurrency){
+    const src = sourceCurrency || 'USD';
+    if(displayCurrency === 'auto') return fmtMoney(value, src);
+    const { amount, currency } = convertCurrency(value, src, displayCurrency);
+    return fmtMoney(amount, currency);
   }
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -572,14 +620,14 @@
                          : `<div class="no-art">${escapeHtml(r.title)}</div>`;
     const iv = getItemValue(r);
     const priceBadge = iv
-      ? `<div class="price-badge" title="${iv.exact ? `Priced at your copy's condition (${escapeHtml(r.condition)})` : 'Estimated using the assumed condition — actual condition not on record'}">${iv.exact?'':'~'}${fmtMoney(iv.amount, iv.currency)}</div>` : '';
+      ? `<div class="price-badge" title="${iv.exact ? `Priced at your copy's condition (${escapeHtml(r.condition)})` : 'Estimated using the assumed condition — actual condition not on record'}">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</div>` : '';
     const wantRibbon = isWant ? `<div class="want-ribbon">Want</div>` : '';
     const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
     const firstLabel = r.labels[0];
     const labelLink = firstLabel ? `<span class="label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(firstLabel.name)}">${escapeHtml(firstLabel.name)}</span>` : '—';
 
     if(viewMode === 'list'){
-      const listPrice = iv ? `<span class="list-price">${iv.exact?'':'~'}${fmtMoney(iv.amount, iv.currency)}</span>` : '';
+      const listPrice = iv ? `<span class="list-price">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</span>` : '';
       const listWant = isWant ? `<span class="list-want">Want</span>` : '';
       return `
         <div class="sleeve sleeve-list" data-id="${r.id}" tabindex="0">
@@ -797,14 +845,14 @@
     if(cached && !cached.unavailable){
       const breakdownHtml = cached.breakdown
         ? `<div class="value-breakdown">${cached.breakdown.slice().sort((a,b)=>a.value-b.value).map(b=>`
-            <div class="breakdown-row"><span>${escapeHtml(b.condition)}</span><span>${fmtMoney(b.value, b.currency)}</span></div>
+            <div class="breakdown-row"><span>${escapeHtml(b.condition)}</span><span>${fmtMoneyDisplay(b.value, b.currency)}</span></div>
           `).join('')}</div>`
         : `<div class="value-note">Condition-by-condition breakdown wasn't kept when this was first fetched — <span class="refresh-link" id="refreshValueLink">refresh this one price</span> to see it.</div>`;
       body.innerHTML = `
         <div class="value-grid">
-          <div class="value-cell"><div class="lab">Low</div><div class="val">${fmtMoney(cached.low, cached.currency)}</div></div>
-          <div class="value-cell"><div class="lab">Median</div><div class="val">${fmtMoney(cached.median, cached.currency)}</div></div>
-          <div class="value-cell"><div class="lab">High</div><div class="val">${fmtMoney(cached.high, cached.currency)}</div></div>
+          <div class="value-cell"><div class="lab">Low</div><div class="val">${fmtMoneyDisplay(cached.low, cached.currency)}</div></div>
+          <div class="value-cell"><div class="lab">Median</div><div class="val">${fmtMoneyDisplay(cached.median, cached.currency)}</div></div>
+          <div class="value-cell"><div class="lab">High</div><div class="val">${fmtMoneyDisplay(cached.high, cached.currency)}</div></div>
         </div>
         ${breakdownHtml}
         <div class="value-note">Discogs' modeled price suggestions per condition grade (Poor–Mint) — not a record of actual past sales, and not necessarily in the same currency a given sale was recorded in. <span class="refresh-link" id="refreshValueLink2">Refresh this price</span></div>`;
@@ -1224,10 +1272,10 @@
     const mint = price?.breakdown?.find(b=>b.condition==='Mint (M)');
     const ceiling = nm?.value ?? mint?.value ?? price?.median ?? null;
     const isDeal = ceiling != null && market.lowest != null && market.lowest <= ceiling;
-    const lowestStr = market.lowest != null ? fmtMoney(market.lowest, market.currency) : '—';
+    const lowestStr = market.lowest != null ? fmtMoneyDisplay(market.lowest, market.currency) : '—';
     const shopLink = `https://www.discogs.com/sell/release/${r.id}?sort=price%2Casc`;
     return `<div class="gap-deal ${isDeal?'deal-hit':''}">
-      ${isDeal ? '★ Worth a look — ' : ''}Lowest listed: ${lowestStr} (${market.numForSale} for sale)${ceiling!=null ? ` · your NM/M estimate: ${fmtMoney(ceiling, price.currency)}` : ''}
+      ${isDeal ? '★ Worth a look — ' : ''}Lowest listed: ${lowestStr} (${market.numForSale} for sale)${ceiling!=null ? ` · your NM/M estimate: ${fmtMoneyDisplay(ceiling, price.currency)}` : ''}
       <br><a href="${shopLink}" target="_blank" rel="noopener">Check condition on Discogs →</a>
     </div>`;
   }
@@ -1460,8 +1508,8 @@
     }
     if(s.priced){
       const top = s.topValuable[0];
-      let p = `Priced items alone are worth an estimated <b>${fmtMoney(s.valueSum,s.currency)}</b> (based on ${s.priced} of ${s.total} records)`;
-      if(top) p += `, led by ${ic(`<b>${escapeHtml(top.r.title)}</b>`,'title',top.r.title)} by ${ic(escapeHtml(top.r.artistDisplay),'artist',top.r.artistDisplay)} at ${fmtMoney(top.amount, top.currency)}`;
+      let p = `Priced items alone are worth an estimated <b>${fmtMoneyDisplay(s.valueSum,s.currency)}</b> (based on ${s.priced} of ${s.total} records)`;
+      if(top) p += `, led by ${ic(`<b>${escapeHtml(top.r.title)}</b>`,'title',top.r.title)} by ${ic(escapeHtml(top.r.artistDisplay),'artist',top.r.artistDisplay)} at ${fmtMoneyDisplay(top.amount, top.currency)}`;
       paras.push(p + '.');
     }else{
       paras.push(`<span class="locked">Estimate some values from the My Crate view to unlock value-based insights here.</span>`);
@@ -1528,7 +1576,7 @@
       { lab:'Oldest pressing', val:s.oldest?s.oldest.year:'—', click:s.oldest?{ik:'decade', iv:Math.floor(s.oldest.year/10)*10}:null },
       { lab:'Newest addition', val:s.newest?s.newest.year:'—', click:s.newest?{ik:'decade', iv:Math.floor(s.newest.year/10)*10}:null }
     ];
-    if(s.priced) statCards.push({ lab:'Est. crate value', val:fmtMoney(s.valueSum,s.currency), sub:`${s.priced} of ${s.total} priced` });
+    if(s.priced) statCards.push({ lab:'Est. crate value', val:fmtMoneyDisplay(s.valueSum,s.currency), sub:`${s.priced} of ${s.total} priced` });
     if(s.enrichedCount && s.totalDurationSec){
       const hours = s.totalDurationSec/3600;
       statCards.push({ lab:'Total playtime', val: hours<48?`${hours.toFixed(1)}h`:`${(hours/24).toFixed(1)}d`, sub:`${s.enrichedCount} of ${s.total} checked` });
@@ -1580,7 +1628,7 @@
             <h4>Most valuable records</h4>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th>Artist</th><th style="text-align:right;">Est. value</th></tr></thead>
-              <tbody>${s.topValuable.map(v=>`<tr><td>${ic(escapeHtml(v.r.title),'title',v.r.title)}</td><td>${ic(escapeHtml(v.r.artistDisplay),'artist',v.r.artistDisplay)}</td><td class="num">${fmtMoney(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
+              <tbody>${s.topValuable.map(v=>`<tr><td>${ic(escapeHtml(v.r.title),'title',v.r.title)}</td><td>${ic(escapeHtml(v.r.artistDisplay),'artist',v.r.artistDisplay)}</td><td class="num">${fmtMoneyDisplay(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
             </table>
           </div>
         </div>
@@ -1806,7 +1854,7 @@
       const iv = getItemValue(r);
       if(iv){ sum += iv.amount; count++; currency = iv.currency || currency; }
     });
-    valueSum.textContent = count ? fmtMoney(sum, currency) : '—';
+    valueSum.textContent = count ? fmtMoneyDisplay(sum, currency) : '—';
     valueCoverage.textContent = `${count} of ${items.length} priced`;
     if(valuePassRunning){
       valueBtn.textContent = valuePassForce ? 'Estimate value' : 'Stop';
@@ -1869,6 +1917,16 @@
     saveJSON('cratespace:assumedCondition', assumedConditionSelect.value);
     updateValueBar();
     render();
+  });
+
+  displayCurrencySelect.addEventListener('change', ()=>{
+    displayCurrency = displayCurrencySelect.value;
+    localStorage.setItem('cratespace:displayCurrency', displayCurrency);
+    updateValueBar();
+    if(currentView.type === 'browse') render();
+    else if(currentView.type === 'gaps') renderGapsView();
+    else if(currentView.type === 'insights') renderInsightsView();
+    else if(currentView.type === 'artist' || currentView.type === 'label') refreshAfterMutation();
   });
 
   // ---------- sync flow ----------

@@ -25,7 +25,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.15</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.16</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -67,6 +67,22 @@
       <span class="chev">▾</span> Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span>
     </button>
     <div class="value-bar-controls" id="valueBarControls">
+      <label class="assume-label" title="Show values converted to this currency. 'Auto' shows whatever currency your Discogs account itself returned, with no conversion.">
+        Show in:
+        <select id="displayCurrencySelect">
+          <option value="auto">Auto (as Discogs returns)</option>
+          <option value="NOK">NOK — Norwegian krone</option>
+          <option value="USD">USD — US dollar</option>
+          <option value="EUR">EUR — Euro</option>
+          <option value="GBP">GBP — British pound</option>
+          <option value="SEK">SEK — Swedish krona</option>
+          <option value="DKK">DKK — Danish krone</option>
+          <option value="CHF">CHF — Swiss franc</option>
+          <option value="JPY">JPY — Japanese yen</option>
+          <option value="CAD">CAD — Canadian dollar</option>
+          <option value="AUD">AUD — Australian dollar</option>
+        </select>
+      </label>
       <label class="assume-label" title="Records with a known condition on Discogs always use their own condition's price. This only applies to records with no condition on record.">
         Assume condition:
         <select id="assumedConditionSelect">
@@ -150,7 +166,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.15</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.16</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
