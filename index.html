@@ -582,7 +582,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.14</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.15</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -707,7 +707,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.14</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.15</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -2355,18 +2355,43 @@
       if(wrap) wrap.style.height = Math.max(180, count*28+24) + 'px';
     }
 
-    function chartClick(action){
-      return (evt, elements) => { if(elements.length) action(elements[0].index); };
+    // Default Chart.js hit-testing only registers a click that lands exactly on
+    // a bar's pixels. getElementsAtEventForMode with intersect:false is much
+    // more forgiving — it finds the nearest data point along the given axis,
+    // so clicking anywhere in that bar's row (including on its label) works.
+    function chartClick(axis, action){
+      return (evt, _elements, chart) => {
+        const pts = chart.getElementsAtEventForMode(evt.native || evt, 'index', { intersect:false, axis }, true);
+        if(pts.length) action(pts[0].index);
+      };
+    }
+    function chartHoverCursor(axis){
+      return (evt, _elements, chart) => {
+        const pts = chart.getElementsAtEventForMode(evt.native || evt, 'index', { intersect:false, axis }, true);
+        evt.native.target.style.cursor = pts.length ? 'pointer' : 'default';
+      };
     }
 
     const formatEntries = Object.entries(s.formatMixMap).sort((a,b)=>b[1]-a[1]);
+    function formatMixAction(i){
+      const v = formatEntries[i][0];
+      goToCrateWithFilter({ formatDesc:v, label:`Format — ${v}` });
+    }
     makeChart('chartFormat', {
       type:'doughnut',
       data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#16130f', borderWidth:2 }] },
       options:{
-        onClick: chartClick(i => { const v = formatEntries[i][0]; goToCrateWithFilter({ formatDesc:v, label:`Format — ${v}` }); }),
+        onClick: (evt, elements) => { if(elements.length) formatMixAction(elements[0].index); },
         onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
-        plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10} } } }
+        plugins:{
+          legend:{
+            position:'bottom', labels:{ boxWidth:10, font:{size:10} },
+            // Chart.js's default legend click just toggles that slice's visibility —
+            // replacing it here means clicking a legend label filters instead of
+            // making the slice disappear.
+            onClick: (evt, legendItem) => formatMixAction(legendItem.index)
+          }
+        }
       }
     });
 
@@ -2377,8 +2402,8 @@
       options:{
         indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
         scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
-        onClick: chartClick(i => { const v = s.topStylesList[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'style', label:`Style — ${v}` }); }),
-        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        onClick: chartClick('y', i => { const v = s.topStylesList[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'style', label:`Style — ${v}` }); }),
+        onHover: chartHoverCursor('y')
       }
     });
 
@@ -2388,8 +2413,8 @@
       data:{ labels:decadeEntries.map(e=>e[0]+'s'), datasets:[{ data:decadeEntries.map(e=>e[1]), backgroundColor:'#9a3324' }] },
       options:{
         plugins:{legend:{display:false}}, scales:{ y:{ ticks:{precision:0} } },
-        onClick: chartClick(i => { const v = Number(decadeEntries[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
-        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        onClick: chartClick('x', i => { const v = Number(decadeEntries[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+        onHover: chartHoverCursor('x')
       }
     });
 
@@ -2401,8 +2426,8 @@
       options:{
         indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
         scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
-        onClick: chartClick(i => { const v = topLabels[i].name; goToCrateWithFilter({ search:v, label:`Label — ${v}` }); }),
-        onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+        onClick: chartClick('y', i => { const v = topLabels[i].name; goToCrateWithFilter({ search:v, label:`Label — ${v}` }); }),
+        onHover: chartHoverCursor('y')
       }
     });
 
@@ -2420,8 +2445,8 @@
         data:{ labels:genreVals.map(e=>e[0]), datasets:[{ data:genreVals.map(e=>Math.round(e[1])), backgroundColor:'#d8a51d' }] },
         options:{
           indexAxis:'y', plugins:{legend:{display:false}},
-          onClick: chartClick(i => { const v = genreVals[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
-          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+          onClick: chartClick('y', i => { const v = genreVals[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
+          onHover: chartHoverCursor('y')
         }
       });
       const decVals = Object.entries(s.valueByDecade).sort((a,b)=>Number(a[0])-Number(b[0]));
@@ -2430,8 +2455,8 @@
         data:{ labels:decVals.map(e=>e[0]+'s'), datasets:[{ data:decVals.map(e=>Math.round(e[1])), backgroundColor:'#9a3324' }] },
         options:{
           plugins:{legend:{display:false}},
-          onClick: chartClick(i => { const v = Number(decVals[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
-          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+          onClick: chartClick('x', i => { const v = Number(decVals[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+          onHover: chartHoverCursor('x')
         }
       });
     }
@@ -2445,8 +2470,8 @@
         options:{
           indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
           scales:{ y:{ ticks:{autoSkip:false} } },
-          onClick: chartClick(i => { const v = countryEntries[i][0]; goToCrateWithFilter({ country:v, label:`Pressing country — ${v}` }); }),
-          onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; }
+          onClick: chartClick('y', i => { const v = countryEntries[i][0]; goToCrateWithFilter({ country:v, label:`Pressing country — ${v}` }); }),
+          onHover: chartHoverCursor('y')
         }
       });
     }
