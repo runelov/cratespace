@@ -80,6 +80,29 @@
   .btn.ghost:hover{ border-color:var(--mustard); color:var(--mustard); background:transparent; }
   .btn.small{ padding:6px 11px; font-size:10.5px; }
   .sync-note{ color:var(--line); font-size:11px; margin-top:6px; max-width:640px; line-height:1.5; }
+
+  .setup-toggle{
+    background:var(--ink-soft); border:1px solid var(--line-soft); color:var(--paper-dim);
+    padding:9px 14px; border-radius:2px; cursor:pointer; font-family:'IBM Plex Mono',monospace;
+    font-size:11.5px; display:flex; align-items:center; gap:8px; white-space:nowrap; flex-shrink:0;
+  }
+  .setup-toggle:hover{ border-color:var(--mustard); color:var(--mustard); }
+  .setup-toggle .chev{ transition:transform .15s ease; color:var(--mustard); font-size:9px; display:inline-block; }
+  .setup-toggle.collapsed .chev{ transform:rotate(-90deg); }
+  .setup-panel{ margin-top:14px; }
+  .setup-panel.collapsed{ display:none; }
+
+  @media (max-width:700px){
+    header.top{ padding-top:calc(14px + env(safe-area-inset-top)); padding-bottom:10px; }
+    .brand h1{ font-size:26px; }
+    .brand small{ font-size:9.5px; letter-spacing:0.06em; }
+    .top-row{ align-items:center; }
+    .sync-note{ font-size:10.5px; }
+    .nav-tabs{ margin-top:10px; }
+    .nav-tab{ padding:8px 10px; font-size:11px; }
+    .value-bar{ padding:10px 12px; }
+    .search-row{ margin-top:10px; }
+  }
   .sync-note b{ color:var(--paper-dim); }
 
   .nav-tabs{ display:flex; gap:8px; margin-top:16px; }
@@ -447,28 +470,32 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.4</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.5</span></small>
     </div>
-    <div>
-      <div class="sync-panel">
-        <input id="username" type="text" placeholder="discogs username" autocomplete="off">
-        <input id="token" type="password" placeholder="personal access token (optional)" autocomplete="off">
-        <button class="btn" id="syncBtn" title="Fetch only records added since your last sync">Sync my crate</button>
-        <button class="btn ghost small" id="fullSyncCrateBtn" title="Rebuild your whole crate from scratch — also catches anything you've removed on Discogs">Full resync</button>
-        <button class="btn ghost" id="syncWantBtn" title="Fetch only items added since your last sync">Sync wantlist</button>
-        <button class="btn ghost small" id="fullSyncWantBtn" title="Rebuild your whole wantlist from scratch">Full resync</button>
-        <button class="btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
-      </div>
-      <div class="sync-panel" style="margin-top:8px;">
-        <input id="ghRepo" type="text" placeholder="github-username/repo" autocomplete="off" style="min-width:190px;">
-        <input id="ghPath" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" style="min-width:150px;">
-        <input id="ghToken" type="password" placeholder="github token" autocomplete="off">
-        <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
-        <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
-      </div>
-      <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
-      <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
+    <button class="setup-toggle" id="setupToggle">
+      <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
+    </button>
+  </div>
+
+  <div class="setup-panel" id="setupPanel">
+    <div class="sync-panel">
+      <input id="username" type="text" placeholder="discogs username" autocomplete="off">
+      <input id="token" type="password" placeholder="personal access token (optional)" autocomplete="off">
+      <button class="btn" id="syncBtn" title="Fetch only records added since your last sync">Sync my crate</button>
+      <button class="btn ghost small" id="fullSyncCrateBtn" title="Rebuild your whole crate from scratch — also catches anything you've removed on Discogs">Full resync</button>
+      <button class="btn ghost" id="syncWantBtn" title="Fetch only items added since your last sync">Sync wantlist</button>
+      <button class="btn ghost small" id="fullSyncWantBtn" title="Rebuild your whole wantlist from scratch">Full resync</button>
+      <button class="btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
     </div>
+    <div class="sync-panel" style="margin-top:8px;">
+      <input id="ghRepo" type="text" placeholder="github-username/repo" autocomplete="off" style="min-width:190px;">
+      <input id="ghPath" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" style="min-width:150px;">
+      <input id="ghToken" type="password" placeholder="github token" autocomplete="off">
+      <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
+      <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
+    </div>
+    <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
+    <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
   </div>
 
   <div class="nav-tabs" id="navTabs" style="display:none;">
@@ -552,7 +579,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.4</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.5</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -593,6 +620,9 @@
   const ghPushBtn = el('ghPushBtn');
   const ghPullBtn = el('ghPullBtn');
   const ghNote = el('ghNote');
+  const setupToggle = el('setupToggle');
+  const setupToggleLabel = el('setupToggleLabel');
+  const setupPanel = el('setupPanel');
   const ghNoteDefault = ghNote.innerHTML;
   const syncNote = el('syncNote');
   const navTabs = el('navTabs');
@@ -2226,11 +2256,26 @@
   });
 
   // ---------- sync flow ----------
+  function setSetupCollapsed(collapsed, persist){
+    setupPanel.classList.toggle('collapsed', collapsed);
+    setupToggle.classList.toggle('collapsed', collapsed);
+    if(persist) localStorage.setItem('cratespace:setupCollapsed', collapsed ? '1' : '0');
+  }
+  function updateSetupToggleLabel(){
+    setupToggleLabel.textContent = collection.length
+      ? `Setup & Sync · ${collection.length} record${collection.length===1?'':'s'}`
+      : 'Setup & Sync';
+  }
+  setupToggle.addEventListener('click', ()=>{
+    setSetupCollapsed(!setupPanel.classList.contains('collapsed'), true);
+  });
+
   function refreshNav(){
     crateCount.textContent = collection.length;
     wantCount.textContent = wantlist.length;
     navTabs.style.display = (collection.length || wantlist.length) ? 'flex' : 'none';
     valueBar.style.display = (collection.length || wantlist.length) ? 'flex' : 'none';
+    updateSetupToggleLabel();
   }
 
   function switchDataset(ds){
@@ -2309,6 +2354,7 @@
       searchInput.value = ''; searchTerm = '';
       switchDataset('crate');
       refreshNav(); buildTabs(); updateValueBar(); render();
+      if(localStorage.getItem('cratespace:setupCollapsed') === null) setSetupCollapsed(true, false);
     }catch(err){
       showState(`<h2>Couldn't sync the crate</h2><p>${escapeHtml(err.message)}</p>`);
     }finally{
@@ -2705,6 +2751,9 @@
   // ---------- boot ----------
   (async function init(){
     loadAllCaches();
+    const savedCollapsed = localStorage.getItem('cratespace:setupCollapsed');
+    const hasExplicitPreference = savedCollapsed !== null;
+    if(hasExplicitPreference) setSetupCollapsed(savedCollapsed === '1', false);
     const lastGhRepo = localStorage.getItem('cratespace:ghRepo');
     const lastGhPath = localStorage.getItem('cratespace:ghPath');
     if(lastGhRepo) ghRepo.value = lastGhRepo;
@@ -2716,11 +2765,13 @@
       if(cachedWant && cachedWant.items?.length) wantlist = cachedWant.items;
       doSyncCrate({ quiet:true }).then(loaded=>{
         refreshNav(); updateValueBar();
+        if(!hasExplicitPreference) setSetupCollapsed(!!loaded, false);
         if(!loaded){
           showState(`<h2>Your crate is empty</h2><p>Click "Sync my crate" to fetch it from Discogs.</p>`);
         }
       });
     }else{
+      if(!hasExplicitPreference) setSetupCollapsed(false, false);
       showState(`<h2>Your crate is empty</h2><p>Enter your Discogs username (and a personal access token if your collection is private, or to raise the rate limit) then click "Sync my crate".</p>`);
     }
   })();
