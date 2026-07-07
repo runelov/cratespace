@@ -32,11 +32,13 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
+  html{ -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   body{
     background:var(--ink);
     color:var(--paper);
     font-family:'Inter',sans-serif;
     min-height:100vh;
+    overflow-x:hidden;
   }
   ::selection{ background:var(--mustard); color:var(--ink); }
   .display{ font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.03em; }
@@ -100,11 +102,13 @@
     .sync-note{ font-size:10.5px; }
 
     .nav-tabs{
-      margin-top:10px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-      scrollbar-width:none; padding-bottom:2px;
+      margin-top:10px; display:grid; grid-template-columns:repeat(4, 1fr); gap:5px;
     }
-    .nav-tabs::-webkit-scrollbar{ display:none; }
-    .nav-tab{ padding:8px 10px; font-size:11px; flex-shrink:0; }
+    .nav-tab{
+      padding:8px 3px; font-size:9.5px; letter-spacing:0.01em; flex-shrink:0;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:center;
+    }
+    .nav-tab .n{ font-size:9px; margin-left:2px; }
 
     .value-bar{ padding:10px 12px; flex-direction:column; align-items:stretch; gap:8px; }
     .value-bar-toggle{
@@ -299,10 +303,11 @@
   .grid-compact .want-ribbon{ font-size:8px; padding:2px 7px; }
 
   /* ---------- view density: list ---------- */
-  .grid-list{ display:flex; flex-direction:column; gap:0; }
+  .grid-list{ display:flex; flex-direction:column; gap:0; width:100%; max-width:100%; }
   .sleeve-list{
     display:flex; align-items:center; gap:12px; padding:9px 4px;
     border-bottom:1px solid var(--line-soft); cursor:pointer; position:relative;
+    width:100%; max-width:100%; box-sizing:border-box;
   }
   .sleeve-list .list-thumb{
     width:46px; height:46px; flex-shrink:0; border-radius:2px; overflow:hidden;
@@ -310,9 +315,9 @@
   }
   .sleeve-list .list-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
   .sleeve-list .list-thumb .no-art{ width:100%; height:100%; background:var(--paper-dim); }
-  .sleeve-list .list-info{ min-width:0; flex:1; }
-  .sleeve-list .list-title{ font-size:13px; color:var(--paper); font-weight:600; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .sleeve-list .list-sub{ font-size:10.5px; color:var(--line); font-family:'IBM Plex Mono',monospace; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sleeve-list .list-info{ min-width:0; max-width:100%; flex:1 1 0%; overflow:hidden; }
+  .sleeve-list .list-title{ font-size:13px; color:var(--paper); font-weight:600; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  .sleeve-list .list-sub{ font-size:10.5px; color:var(--line); font-family:'IBM Plex Mono',monospace; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
   .sleeve-list .list-sub .artist-link{ color:var(--mustard); }
   .sleeve-list .list-price{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--mustard); flex-shrink:0; }
   .sleeve-list .list-want{
@@ -566,7 +571,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.10</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.12</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -690,7 +695,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.10</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.12</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
