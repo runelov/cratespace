@@ -16,7 +16,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
 <style>
   :root{
     --ink:#16130f;
@@ -447,7 +447,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.3</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.4</span></small>
     </div>
     <div>
       <div class="sync-panel">
@@ -552,7 +552,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.3</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.4</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -628,6 +628,60 @@
   const genreModeToggle = el('genreModeToggle');
   const clearFiltersBtn = el('clearFilters');
   const modalRoot = el('modalRoot');
+
+  // ---------- large-data storage (IndexedDB) ----------
+  // localStorage has a small, fixed per-origin quota that's especially tight
+  // on iOS Safari (historically ~5MB) — a large collection can blow straight
+  // through it with nothing else even helping. IndexedDB's quota is tied to
+  // actual available device storage instead, so the crate and wantlist —
+  // the two essential, potentially-large datasets — live here rather than
+  // in localStorage. Everything else (prices, bios, preferences) stays in
+  // localStorage since it's smaller and the synchronous access is convenient.
+  const IDB_NAME = 'cratespace-db';
+  const IDB_STORE = 'kv';
+  let idbPromise = null;
+  function openIdb(){
+    if(!window.indexedDB) return Promise.reject(new Error('This browser has no IndexedDB support — cannot store a crate this large.'));
+    if(idbPromise) return idbPromise;
+    idbPromise = new Promise((resolve, reject)=>{
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = ()=>{ req.result.createObjectStore(IDB_STORE); };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error || new Error('Could not open local database.'));
+    });
+    return idbPromise;
+  }
+  async function idbGet(key){
+    const db = await openIdb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = ()=> resolve(req.result === undefined ? null : req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+  async function idbSet(key, value){
+    const db = await openIdb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = ()=> resolve(true);
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+  async function idbSetSafe(key, value){
+    try{ await idbSet(key, value); return true; }
+    catch(e){ return false; }
+  }
+  async function idbDelete(key){
+    const db = await openIdb();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(key);
+      tx.oncomplete = ()=> resolve(true);
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
 
   // ---------- persistence ----------
   function collectionKey(u){ return `cratespace:collection:${u.toLowerCase()}`; }
@@ -1199,7 +1253,7 @@
         { title:`Remove from ${label}?`, confirmLabel:'Remove', cancelLabel:'Keep it' }
       );
       if(!ok) return;
-      if(sourceList === 'crate') removeFromCrate(r); else removeFromWantlist(r);
+      if(sourceList === 'crate') await removeFromCrate(r); else await removeFromWantlist(r);
       closeModal();
       refreshAfterMutation();
     });
@@ -1345,22 +1399,22 @@
   // is genuinely still there. Matched by instance_id where available (a
   // collection item's stable unique id) since the same release can appear
   // more than once in a crate; wantlist items fall back to release id.
-  function removeFromCrate(record){
+  async function removeFromCrate(record){
     collection = collection.filter(r => record.instance_id ? r.instance_id !== record.instance_id : r.id !== record.id);
     const username = usernameInput.value.trim();
     if(username){
-      const cached = loadJSON(collectionKey(username)) || {};
+      const cached = (await idbGet(collectionKey(username))) || {};
       cached.items = collection;
-      saveJSON(collectionKey(username), cached);
+      await idbSet(collectionKey(username), cached);
     }
   }
-  function removeFromWantlist(record){
+  async function removeFromWantlist(record){
     wantlist = wantlist.filter(r => r.id !== record.id);
     const username = usernameInput.value.trim();
     if(username){
-      const cached = loadJSON(wantlistKey(username)) || {};
+      const cached = (await idbGet(wantlistKey(username))) || {};
       cached.items = wantlist;
-      saveJSON(wantlistKey(username), cached);
+      await idbSet(wantlistKey(username), cached);
     }
   }
   function refreshAfterMutation(){
@@ -2203,7 +2257,7 @@
     if(!username){ showState(`<h2>Missing username</h2><p>Enter a Discogs username to dig through.</p>`); return; }
 
     if(quiet){
-      const cached = loadJSON(collectionKey(username));
+      const cached = await idbGet(collectionKey(username));
       if(cached && cached.items?.length){
         collection = cached.items;
         clearState();
@@ -2216,11 +2270,11 @@
       return false;
     }
 
-    const cachedRaw = full ? null : loadJSON(collectionKey(username));
+    const cachedRaw = full ? null : await idbGet(collectionKey(username));
     const existingItems = cachedRaw?.items || [];
     const knownIds = knownCollectionIds(existingItems);
     if(full && existingItems.length === 0){
-      const priorRaw = loadJSON(collectionKey(username));
+      const priorRaw = await idbGet(collectionKey(username));
       if(priorRaw?.items?.length){
         const ok = await showConfirm(`This re-downloads all <b>${priorRaw.items.length}</b> records from Discogs from scratch instead of just checking for new ones. For a large crate that can take a while.`, { title:'Full resync your crate?', confirmLabel:'Full resync' });
         if(!ok) return;
@@ -2241,7 +2295,7 @@
       );
       const merged = full ? newItems : newItems.concat(existingItems);
       collection = merged;
-      saveJSON(collectionKey(username), { syncedAt: new Date().toISOString(), items: merged });
+      await idbSet(collectionKey(username), { syncedAt: new Date().toISOString(), items: merged });
       localStorage.setItem('cratespace:lastUser', username);
       clearState();
       layout.style.display = 'flex';
@@ -2268,11 +2322,11 @@
     const username = usernameInput.value.trim();
     if(!username){ showState(`<h2>Missing username</h2><p>Enter a Discogs username first.</p>`); return; }
 
-    const cachedRaw = full ? null : loadJSON(wantlistKey(username));
+    const cachedRaw = full ? null : await idbGet(wantlistKey(username));
     const existingItems = cachedRaw?.items || [];
     const knownIds = knownWantIds(existingItems);
     if(full && existingItems.length === 0){
-      const priorRaw = loadJSON(wantlistKey(username));
+      const priorRaw = await idbGet(wantlistKey(username));
       if(priorRaw?.items?.length){
         const ok = await showConfirm(`This re-downloads your entire wantlist (<b>${priorRaw.items.length}</b> items) from scratch instead of just checking for new ones.`, { title:'Full resync your wantlist?', confirmLabel:'Full resync' });
         if(!ok) return;
@@ -2293,7 +2347,7 @@
       );
       const merged = full ? newItems : newItems.concat(existingItems);
       wantlist = merged;
-      saveJSON(wantlistKey(username), { syncedAt: new Date().toISOString(), items: merged });
+      await idbSet(wantlistKey(username), { syncedAt: new Date().toISOString(), items: merged });
       localStorage.setItem('cratespace:lastUser', username);
       syncNote.innerHTML = full
         ? `Wantlist rebuilt · <b>${merged.length}</b> items loaded and cached.`
@@ -2313,11 +2367,11 @@
   fullSyncCrateBtn.addEventListener('click', ()=> doSyncCrate({ full:true }));
   syncWantBtn.addEventListener('click', ()=> doSyncWantlist({}));
   fullSyncWantBtn.addEventListener('click', ()=> doSyncWantlist({ full:true }));
-  clearCacheBtn.addEventListener('click', ()=>{
+  clearCacheBtn.addEventListener('click', async ()=>{
     const username = usernameInput.value.trim();
     if(username){
-      localStorage.removeItem(collectionKey(username));
-      localStorage.removeItem(wantlistKey(username));
+      await idbDelete(collectionKey(username));
+      await idbDelete(wantlistKey(username));
     }
     localStorage.removeItem('cratespace:prices');
     localStorage.removeItem('cratespace:artists');
@@ -2329,14 +2383,14 @@
     showState(`<h2>Cache cleared</h2><p>Enter your token (if needed) and sync again to reload your crate.</p>`);
   });
 
-  function buildBackupPayload(){
+  async function buildBackupPayload(){
     const username = usernameInput.value.trim() || localStorage.getItem('cratespace:lastUser') || '';
     return {
       crateSpaceBackup: 1,
       exportedAt: new Date().toISOString(),
       username,
-      collection: username ? loadJSON(collectionKey(username)) : null,
-      wantlist: username ? loadJSON(wantlistKey(username)) : null,
+      collection: username ? await idbGet(collectionKey(username)) : null,
+      wantlist: username ? await idbGet(wantlistKey(username)) : null,
       prices: priceCache,
       market: marketCache,
       artists: artistCache,
@@ -2353,24 +2407,23 @@
   // Writes a backup payload's contents into localStorage. Returns
   // {failures, crateCount, wantCount} — callers handle confirmation dialogs,
   // failure messaging, and reloading themselves.
-  function applyBackupPayload(payload){
+  async function applyBackupPayload(payload){
     const crateCount = payload.collection?.items?.length || 0;
     const wantCount = payload.wantlist?.items?.length || 0;
     const failures = [];
 
-    // Free up whatever the old caches were using first. Collection and
-    // wantlist are the essential, irreplaceable data — they should get
-    // first claim on whatever quota this device actually has (iOS Safari
-    // in particular caps localStorage far tighter than desktop browsers).
-    // Everything cleared here can always be rebuilt from Discogs later.
+    // Crate and wantlist go to IndexedDB, which has a much larger quota than
+    // localStorage (especially on iOS Safari) — they no longer compete with
+    // anything else for space. The smaller caches below still use
+    // localStorage; clear old copies first so they don't pile up.
     localStorage.removeItem('cratespace:prices');
     localStorage.removeItem('cratespace:market');
     localStorage.removeItem('cratespace:artists');
     localStorage.removeItem('cratespace:labels');
     localStorage.removeItem('cratespace:enrich');
 
-    if(payload.collection && !saveJSON(collectionKey(payload.username), payload.collection)) failures.push('crate');
-    if(payload.wantlist && !saveJSON(wantlistKey(payload.username), payload.wantlist)) failures.push('wantlist');
+    if(payload.collection && !(await idbSetSafe(collectionKey(payload.username), payload.collection))) failures.push('crate');
+    if(payload.wantlist && !(await idbSetSafe(wantlistKey(payload.username), payload.wantlist))) failures.push('wantlist');
     if(!saveJSON('cratespace:prices', payload.prices || {})) failures.push('value data');
     if(!saveJSON('cratespace:market', payload.market || {})) failures.push('deal-check data');
     if(!saveJSON('cratespace:artists', payload.artists || {})) failures.push('artist bios');
@@ -2458,7 +2511,7 @@
     const path = ghPath.value.trim() || 'cratespace-backup.json';
     const api = `https://api.github.com/repos/${owner}/${repo}`;
 
-    const payload = buildBackupPayload();
+    const payload = await buildBackupPayload();
     const jsonStr = JSON.stringify(payload);
     const contentB64 = utf8ToBase64(jsonStr);
 
@@ -2621,7 +2674,7 @@
         : `Pull the backup for "<b>${escapeHtml(payload.username)}</b>" — <b>${crateCount}</b> crate records and <b>${wantCount}</b> wantlist items?`;
       const ok = await showConfirm(msg, { title:'Replace local data?', confirmLabel:'Pull & replace' });
       if(!ok){ ghNote.innerHTML = ghNoteDefault; ghPushBtn.disabled=false; ghPullBtn.disabled=false; return; }
-      const { failures } = applyBackupPayload(payload);
+      const { failures } = await applyBackupPayload(payload);
       reportImportOutcome(payload.username, failures, crateCount, wantCount);
       location.reload();
     }catch(err){
@@ -2650,7 +2703,7 @@
   });
 
   // ---------- boot ----------
-  (function init(){
+  (async function init(){
     loadAllCaches();
     const lastGhRepo = localStorage.getItem('cratespace:ghRepo');
     const lastGhPath = localStorage.getItem('cratespace:ghPath');
@@ -2659,7 +2712,7 @@
     const lastUser = localStorage.getItem('cratespace:lastUser');
     if(lastUser){
       usernameInput.value = lastUser;
-      const cachedWant = loadJSON(wantlistKey(lastUser));
+      const cachedWant = await idbGet(wantlistKey(lastUser));
       if(cachedWant && cachedWant.items?.length) wantlist = cachedWant.items;
       doSyncCrate({ quiet:true }).then(loaded=>{
         refreshNav(); updateValueBar();
