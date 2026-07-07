@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=2026-07-07.20">
+<link rel="stylesheet" href="styles.css?v=2026-07-07.21">
 </head>
 <body>
 
@@ -25,7 +25,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.20</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.21</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -34,8 +34,8 @@
 
   <div class="setup-panel" id="setupPanel">
     <div class="sync-panel">
-      <input id="username" type="text" placeholder="discogs username" autocomplete="off">
-      <input id="token" type="password" placeholder="personal access token (optional)" autocomplete="off">
+      <input id="username" name="deadwax-discogs-username" type="text" placeholder="discogs username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <input id="token" name="deadwax-discogs-token" type="text" placeholder="personal access token (optional)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="btn" id="syncBtn" title="Fetch only records added since your last sync">Sync my crate</button>
       <button class="btn ghost small" id="fullSyncCrateBtn" title="Rebuild your whole crate from scratch — also catches anything you've removed on Discogs">Full resync</button>
       <button class="btn ghost" id="syncWantBtn" title="Fetch only items added since your last sync">Sync wantlist</button>
@@ -43,9 +43,9 @@
       <button class="btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
     </div>
     <div class="sync-panel" style="margin-top:8px;">
-      <input id="ghRepo" type="text" placeholder="github-username/repo" autocomplete="off" style="min-width:190px;">
-      <input id="ghPath" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" style="min-width:150px;">
-      <input id="ghToken" type="password" placeholder="github token" autocomplete="off">
+      <input id="ghRepo" name="deadwax-github-repo" type="text" placeholder="github-username/repo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:190px;">
+      <input id="ghPath" name="deadwax-github-path" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:150px;">
+      <input id="ghToken" name="deadwax-github-token" type="text" placeholder="github token" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
       <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
     </div>
@@ -166,10 +166,10 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.20</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.21</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
-<script src="app.js?v=2026-07-07.20"></script>
+<script src="app.js?v=2026-07-07.21"></script>
 </body>
 </html>
