@@ -2378,14 +2378,13 @@
       // Handled below: bootstrap the first commit and create the branch.
     }
 
-    onProgress && onProgress('Uploading backup blob…');
-    const blob = await githubApiFetch(`${api}/git/blobs`, {
-      method:'POST',
-      body: JSON.stringify({ content: contentB64, encoding:'base64' })
-    });
-
     let newCommitSha;
     if(refData){
+      onProgress && onProgress('Uploading backup blob…');
+      const blob = await githubApiFetch(`${api}/git/blobs`, {
+        method:'POST',
+        body: JSON.stringify({ content: contentB64, encoding:'base64' })
+      });
       const commit = await githubApiFetch(`${api}/git/commits/${refData.object.sha}`);
       onProgress && onProgress('Building new commit…');
       const tree = await githubApiFetch(`${api}/git/trees`, {
@@ -2403,21 +2402,21 @@
         body: JSON.stringify({ sha: newCommitSha })
       });
     }else{
+      // Bootstrapping a genuinely empty repo: the low-level Git Data API
+      // (blob/tree/commit/ref) doesn't reliably work with zero prior commits.
+      // The simple Contents API is specifically built to create a new file
+      // from nothing, so use that just for this first commit.
       onProgress && onProgress('Creating first commit (empty repo)…');
-      const tree = await githubApiFetch(`${api}/git/trees`, {
-        method:'POST',
-        body: JSON.stringify({ tree:[{ path, mode:'100644', type:'blob', sha: blob.sha }] })
-      });
-      const newCommit = await githubApiFetch(`${api}/git/commits`, {
-        method:'POST',
-        body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, tree: tree.sha })
-      });
-      newCommitSha = newCommit.sha;
-      onProgress && onProgress('Creating branch…');
-      await githubApiFetch(`${api}/git/refs`, {
-        method:'POST',
-        body: JSON.stringify({ ref:`refs/heads/${branch}`, sha: newCommitSha })
-      });
+      let created;
+      try{
+        created = await githubApiFetch(`${api}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
+          method:'PUT',
+          body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, content: contentB64 })
+        });
+      }catch(err){
+        throw new Error(`Couldn't create the first commit (${err.message}). A quick one-time fix: on GitHub, open the repo and click "Add a README file" (or add any file) to give it one initial commit, then try Push again — after that, pushes use a different path with no size limit.`);
+      }
+      newCommitSha = created.commit?.sha;
     }
     return { crateCount: payload.collection?.items?.length||0, wantCount: payload.wantlist?.items?.length||0 };
   }
