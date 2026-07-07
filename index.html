@@ -299,10 +299,13 @@
   .track-row .dur{ margin-left:auto; color:#6b6250; }
   .track-loading, .track-error{ font-size:12.5px; color:#6b6250; font-family:'IBM Plex Mono',monospace; }
   a.discogs-link{ font-size:12px; color:var(--rust); text-decoration:underline; display:inline-block; margin-top:16px; }
-  .modal-footer-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .modal-footer-row{ display:flex; flex-direction:column; align-items:stretch; gap:10px; }
   .modal-footer-row .discogs-link{ margin-top:16px; }
-  .remove-btn{ margin-top:16px; border-color:var(--rust); color:var(--rust); }
-  .btn.remove-btn:hover{ background:var(--rust); color:var(--paper); border-color:var(--rust); }
+  .remove-btn{
+    margin-top:0; background:var(--rust) !important; color:#fff !important; border:2px solid var(--rust) !important;
+    padding:12px !important; font-size:13px !important; width:100%;
+  }
+  .btn.remove-btn:hover{ background:#7a281d !important; color:#fff !important; }
 
   .value-block{ margin-top:20px; border-top:1px solid var(--paper-dim); padding-top:14px; }
   .value-grid{ display:flex; gap:10px; flex-wrap:wrap; }
@@ -442,7 +445,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.1</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.2</span></small>
     </div>
     <div>
       <div class="sync-panel">
@@ -547,7 +550,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.1</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.2</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
