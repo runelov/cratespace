@@ -326,7 +326,8 @@
       labels,
       catno: labels[0]?.catno || '',
       date_added: entry.date_added || null,
-      condition: extractCondition(entry)
+      condition: extractCondition(entry),
+      masterId: bi.master_id || null
     };
   }
 
@@ -522,6 +523,19 @@
     return { amount: p.median, currency: p.currency, exact:false };
   }
 
+  function sumValueOf(items){
+    let sum = 0, count = 0, currency = 'USD';
+    items.forEach(r=>{
+      const iv = getItemValue(r);
+      if(iv){ sum += iv.amount; count++; currency = iv.currency || currency; }
+    });
+    return { sum, count, currency, total: items.length };
+  }
+  function valueSuffix(items){
+    const v = sumValueOf(items);
+    return v.count ? ` · ~${fmtMoneyDisplay(v.sum, v.currency)} (${v.count} of ${v.total} priced)` : '';
+  }
+
   function groupKeyFor(r, mode){
     if(mode === 'artist') return r.artistDisplay || 'Unknown artist';
     if(mode === 'year') return r.year ? String(r.year) : 'Unknown year';
@@ -596,7 +610,7 @@
   function render(){
     if(currentView.type !== 'browse') return;
     applyFiltersAndSort();
-    countTag.textContent = `${filtered.length} record${filtered.length===1?'':'s'}`;
+    countTag.textContent = `${filtered.length} record${filtered.length===1?'':'s'}${valueSuffix(filtered)}`;
     if(filtered.length === 0){
       grid.innerHTML = `<div class="state" style="padding:60px 20px;">
         <h2>Empty bin</h2>
@@ -608,6 +622,28 @@
     const mode = groupSelect.value;
     if(mode === 'none'){
       grid.innerHTML = `<div class="${gridClass()}">${filtered.map(r => sleeveCard(r, isWant)).join('')}</div>`;
+    }else if(mode === 'master'){
+      // Groups different pressings/versions of the same underlying release —
+      // most useful on the wantlist, where several versions of one album
+      // often get wantlisted separately. Releases with no master_id (some
+      // compilations, one-offs) each get their own single-item group.
+      const groups = new Map();
+      filtered.forEach(r=>{
+        const key = r.masterId ? `m:${r.masterId}` : `single:${r.id}`;
+        if(!groups.has(key)) groups.set(key, { label: r.title, items: [] });
+        groups.get(key).items.push(r);
+      });
+      const entries = Array.from(groups.values()).sort((a,b)=> b.items.length - a.items.length || a.label.localeCompare(b.label));
+      grid.innerHTML = entries.map(g=>{
+        return `
+          <div class="group-section">
+            <div class="group-header">
+              <h3>${escapeHtml(g.label)}</h3>
+              <span class="group-count">${g.items.length} version${g.items.length===1?'':'s'} wantlisted${valueSuffix(g.items)}</span>
+            </div>
+            <div class="${gridClass()}">${g.items.map(r=>sleeveCard(r, isWant)).join('')}</div>
+          </div>`;
+      }).join('');
     }else{
       const groups = new Map();
       filtered.forEach(r=>{
@@ -627,7 +663,7 @@
           <div class="group-section">
             <div class="group-header">
               <h3>${escapeHtml(key)}</h3>
-              <span class="group-count">${items.length} record${items.length===1?'':'s'}</span>
+              <span class="group-count">${items.length} record${items.length===1?'':'s'}${valueSuffix(items)}</span>
             </div>
             <div class="${gridClass()}">${items.map(r=>sleeveCard(r, isWant)).join('')}</div>
           </div>`;
@@ -1110,11 +1146,11 @@
         <div class="detail-bio" id="detailBio"><p class="detail-loading">Reading the sleeve notes…</p></div>
       </div>
       <div class="detail-section">
-        <h3>In your crate</h3>
+        <h3>In your crate <span class="detail-section-count" id="detailCrateCount"></span></h3>
         <div id="detailCrateGrid"></div>
       </div>
       <div class="detail-section">
-        <h3>On your wantlist</h3>
+        <h3>On your wantlist <span class="detail-section-count" id="detailWantCount"></span></h3>
         <div id="detailWantGrid"></div>
       </div>`;
     el('backLink').addEventListener('click', showBrowseView);
@@ -1133,6 +1169,10 @@
   function renderDetailSections(inCrate, inWant){
     const crateGrid = el('detailCrateGrid');
     const wantGrid = el('detailWantGrid');
+    const crateCountEl = el('detailCrateCount');
+    const wantCountEl = el('detailWantCount');
+    if(crateCountEl) crateCountEl.textContent = inCrate.length ? `(${inCrate.length}${valueSuffix(inCrate)})` : '';
+    if(wantCountEl) wantCountEl.textContent = inWant.length ? `(${inWant.length}${valueSuffix(inWant)})` : '';
     if(crateGrid){
       crateGrid.innerHTML = inCrate.length
         ? `<div class="${gridClass()}">${inCrate.map(r=>sleeveCard(r,false)).join('')}</div>`
@@ -1250,7 +1290,7 @@
             <div class="gap-group-header">
               <h3 class="gap-artist-link" data-id="${g.artistId}" data-name="${escapeHtml(g.name)}">${escapeHtml(g.name)}</h3>
               <span class="gap-owned-badge">${g.ownedCount} owned</span>
-              <span class="gap-want-count">${g.wanted.length} wanted</span>
+              <span class="gap-want-count">${g.wanted.length} wanted${valueSuffix(g.wanted)}</span>
             </div>
             <div class="${gridClass()}">
               ${g.wanted.map(r => `<div class="gap-item">${sleeveCard(r, true)}${gapDealHtml(r)}</div>`).join('')}
