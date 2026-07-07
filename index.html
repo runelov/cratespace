@@ -297,6 +297,10 @@
   .track-row .dur{ margin-left:auto; color:#6b6250; }
   .track-loading, .track-error{ font-size:12.5px; color:#6b6250; font-family:'IBM Plex Mono',monospace; }
   a.discogs-link{ font-size:12px; color:var(--rust); text-decoration:underline; display:inline-block; margin-top:16px; }
+  .modal-footer-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .modal-footer-row .discogs-link{ margin-top:16px; }
+  .remove-btn{ margin-top:16px; border-color:var(--rust); color:var(--rust); }
+  .btn.remove-btn:hover{ background:var(--rust); color:var(--paper); border-color:var(--rust); }
 
   .value-block{ margin-top:20px; border-top:1px solid var(--paper-dim); padding-top:14px; }
   .value-grid{ display:flex; gap:10px; flex-wrap:wrap; }
@@ -1132,7 +1136,11 @@
 
   // ---------- modal ----------
   async function openModal(id){
-    const r = activeItems().find(x=>x.id===id) || collection.find(x=>x.id===id) || wantlist.find(x=>x.id===id);
+    let sourceList = null;
+    let r = activeItems().find(x=>x.id===id);
+    if(r){ sourceList = activeDataset === 'wantlist' ? 'wantlist' : 'crate'; }
+    if(!r){ r = collection.find(x=>x.id===id); if(r) sourceList = 'crate'; }
+    if(!r){ r = wantlist.find(x=>x.id===id); if(r) sourceList = 'wantlist'; }
     if(!r) return;
     const art = r.cover ? `<img src="${r.cover}" alt="">` : `<div class="no-art">${escapeHtml(r.title)}</div>`;
     const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
@@ -1165,7 +1173,10 @@
                 <h4>Tracklist</h4>
                 <div class="tracklist-body" id="tracklistBody"><div class="track-loading">Dropping the needle…</div></div>
               </div>
-              <a class="discogs-link" href="https://www.discogs.com/release/${r.id}" target="_blank" rel="noopener">View on Discogs →</a>
+              <div class="modal-footer-row">
+                <a class="discogs-link" href="https://www.discogs.com/release/${r.id}" target="_blank" rel="noopener">View on Discogs →</a>
+                <button class="btn ghost small remove-btn" id="removeItemBtn">Remove from ${sourceList === 'crate' ? 'crate' : 'wantlist'}</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1173,6 +1184,18 @@
     el('backdrop').addEventListener('click', e=>{ if(e.target.id==='backdrop') closeModal(); });
     el('modalClose').addEventListener('click', closeModal);
     document.addEventListener('keydown', escCloseOnce);
+    const removeBtn = el('removeItemBtn');
+    if(removeBtn) removeBtn.addEventListener('click', async ()=>{
+      const label = sourceList === 'crate' ? 'crate' : 'wantlist';
+      const ok = await showConfirm(
+        `Remove <b>${escapeHtml(r.title)}</b> by ${escapeHtml(r.artistDisplay)} from your ${label}? This only changes what's cached in this browser — it won't touch Discogs, and a future sync won't bring it back unless it's still on Discogs.`,
+        { title:`Remove from ${label}?`, confirmLabel:'Remove', cancelLabel:'Keep it' }
+      );
+      if(!ok) return;
+      if(sourceList === 'crate') removeFromCrate(r); else removeFromWantlist(r);
+      closeModal();
+      refreshAfterMutation();
+    });
     modalRoot.querySelectorAll('.artist-link').forEach(node=> node.addEventListener('click', ()=>{
       closeModal(); openArtistView(Number(node.dataset.id), node.dataset.name);
     }));
@@ -1308,6 +1331,46 @@
   function closeModal(){
     modalRoot.innerHTML = '';
     document.removeEventListener('keydown', escCloseOnce);
+  }
+
+  // Discogs has no way to tell us about deletions, so this is purely a local
+  // edit — it never touches Discogs, and won't survive a resync if the item
+  // is genuinely still there. Matched by instance_id where available (a
+  // collection item's stable unique id) since the same release can appear
+  // more than once in a crate; wantlist items fall back to release id.
+  function removeFromCrate(record){
+    collection = collection.filter(r => record.instance_id ? r.instance_id !== record.instance_id : r.id !== record.id);
+    const username = usernameInput.value.trim();
+    if(username){
+      const cached = loadJSON(collectionKey(username)) || {};
+      cached.items = collection;
+      saveJSON(collectionKey(username), cached);
+    }
+  }
+  function removeFromWantlist(record){
+    wantlist = wantlist.filter(r => r.id !== record.id);
+    const username = usernameInput.value.trim();
+    if(username){
+      const cached = loadJSON(wantlistKey(username)) || {};
+      cached.items = wantlist;
+      saveJSON(wantlistKey(username), cached);
+    }
+  }
+  function refreshAfterMutation(){
+    refreshNav();
+    updateValueBar();
+    if(currentView.type === 'browse'){ buildTabs(); render(); }
+    else if(currentView.type === 'gaps'){ renderGapsView(); }
+    else if(currentView.type === 'insights'){ renderInsightsView(); }
+    else if(currentView.type === 'artist'){
+      const inCrate = collection.filter(r=> r.artists.some(a=>a.id===currentView.id));
+      const inWant = wantlist.filter(r=> r.artists.some(a=>a.id===currentView.id));
+      renderDetailSections(inCrate, inWant);
+    }else if(currentView.type === 'label'){
+      const inCrate = collection.filter(r=> r.labels.some(l=>l.id===currentView.id));
+      const inWant = wantlist.filter(r=> r.labels.some(l=>l.id===currentView.id));
+      renderDetailSections(inCrate, inWant);
+    }
   }
 
   // ---------- artist / label detail views ----------
@@ -2287,6 +2350,18 @@
     const crateCount = payload.collection?.items?.length || 0;
     const wantCount = payload.wantlist?.items?.length || 0;
     const failures = [];
+
+    // Free up whatever the old caches were using first. Collection and
+    // wantlist are the essential, irreplaceable data — they should get
+    // first claim on whatever quota this device actually has (iOS Safari
+    // in particular caps localStorage far tighter than desktop browsers).
+    // Everything cleared here can always be rebuilt from Discogs later.
+    localStorage.removeItem('cratespace:prices');
+    localStorage.removeItem('cratespace:market');
+    localStorage.removeItem('cratespace:artists');
+    localStorage.removeItem('cratespace:labels');
+    localStorage.removeItem('cratespace:enrich');
+
     if(payload.collection && !saveJSON(collectionKey(payload.username), payload.collection)) failures.push('crate');
     if(payload.wantlist && !saveJSON(wantlistKey(payload.username), payload.wantlist)) failures.push('wantlist');
     if(!saveJSON('cratespace:prices', payload.prices || {})) failures.push('value data');
@@ -2301,7 +2376,8 @@
 
   function reportImportOutcome(username, failures, crateCount, wantCount){
     if(failures.length){
-      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Whatever did fit is saved; the rest was skipped rather than silently lost. If "crate" is in that list, your crate will still look empty after this reloads — try clearing space (Clear cache on a different site, or use a non-private browser window) and pulling again.`);
+      const crateFailed = failures.includes('crate');
+      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Old cached price/enrichment data was already cleared to make room before this was attempted, so ${crateFailed ? "even your crate and wantlist alone don't fit in what this browser allows — that's a hard limit of this device/browser (iOS Safari in particular caps this well below desktop browsers), not something clearing more space will fix" : "the crate and wantlist saved fine; only the optional extras above didn't fit"}. Whatever did fit is saved; the rest was skipped rather than silently lost.`);
     }else if(crateCount === 0 && wantCount === 0){
       alert(`Heads up: this backup itself contains 0 crate records and 0 wantlist items for "${username}" — there's nothing to restore from it. This usually means it was pushed before a sync had completed in that browser.`);
     }
