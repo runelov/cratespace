@@ -92,7 +92,7 @@
   .setup-panel{ margin-top:14px; }
   .setup-panel.collapsed{ display:none; }
 
-  @media (max-width:700px){
+  @media (max-width:760px){
     header.top{ padding-top:calc(14px + env(safe-area-inset-top)); padding-bottom:10px; }
     .brand h1{ font-size:26px; }
     .brand small{ font-size:9.5px; letter-spacing:0.06em; }
@@ -104,6 +104,13 @@
     .search-row{ margin-top:10px; }
   }
   .sync-note b{ color:var(--paper-dim); }
+  .filters-toggle-btn{ display:none; }
+  .filters-close-btn{
+    display:none; width:100%; margin-bottom:18px; background:var(--ink-soft);
+    border:1px solid var(--line-soft); color:var(--paper); padding:12px;
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.04em;
+    font-size:13px; border-radius:2px; cursor:pointer;
+  }
 
   .nav-tabs{ display:flex; gap:8px; margin-top:16px; }
   .nav-tab{
@@ -435,6 +442,16 @@
   .chart-box{ background:var(--ink-soft); border:1px solid var(--line-soft); border-radius:2px; padding:18px; }
   .chart-box h4{ font-family:'IBM Plex Mono',monospace; text-transform:uppercase; font-size:11px; letter-spacing:0.05em; color:var(--line); margin:0 0 12px; }
   .chart-box canvas{ max-height:280px; }
+  .chart-tall-wrap{ position:relative; width:100%; }
+  .chart-tall-wrap canvas{ max-height:none; }
+  .timeline-cutoff-ctrl{
+    font-size:10.5px; font-weight:400; text-transform:none; letter-spacing:0; color:var(--line);
+    display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace;
+  }
+  .timeline-cutoff-ctrl input[type="date"]{
+    background:var(--ink); border:1px solid var(--line-soft); color:var(--paper-dim);
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; padding:3px 6px; border-radius:2px;
+  }
   .chart-box.wide{ grid-column:1/-1; }
 
   .enrich-panel{
@@ -444,8 +461,6 @@
   .enrich-panel .txt{ font-size:12px; color:var(--paper-dim); max-width:520px; }
   .enrich-panel .progress{ font-size:11px; color:var(--line); flex:1; min-width:140px; }
 
-  .wheel-wrap{ display:flex; justify-content:center; padding:10px 0; }
-  .wheel-wrap svg text{ font-family:'IBM Plex Mono',monospace; }
 
   .leaderboard{ width:100%; border-collapse:collapse; font-size:12.5px; }
   .leaderboard th{ text-align:left; font-family:'IBM Plex Mono',monospace; text-transform:uppercase; font-size:10px; color:var(--line); padding:6px 10px; border-bottom:1px solid var(--line-soft); }
@@ -455,8 +470,19 @@
 
   @media (max-width:760px){
     .layout{ flex-direction:column; }
-    aside.dividers{ width:100%; position:static; display:flex; flex-wrap:wrap; gap:18px; max-height:none; overflow:visible; }
     .divider-group{ margin-bottom:0; }
+    .filters-toggle-btn{ display:inline-flex; }
+    .filters-close-btn{ display:block; }
+    aside.dividers{
+      display:none;
+      position:fixed; inset:0; z-index:150;
+      width:100%; max-width:none; max-height:none;
+      background:var(--ink); padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+      flex-wrap:nowrap; flex-direction:column; gap:0;
+      overflow-y:auto; -webkit-overflow-scrolling:touch;
+    }
+    body.filters-open aside.dividers{ display:flex; }
+    body.filters-open{ overflow:hidden; }
   }
   @media (prefers-reduced-motion: reduce){
     *{ animation-duration:0.001s !important; transition-duration:0.001s !important; }
@@ -470,7 +496,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.5</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.7</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -543,11 +569,13 @@
       <option value="label">Browse: by label</option>
     </select>
     <span class="count-tag" id="countTag">0 records</span>
+    <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
   </div>
 </header>
 
 <div class="layout" id="layout" style="display:none;">
   <aside class="dividers">
+    <button class="filters-close-btn" id="filtersCloseBtn">✕ Close filters</button>
     <div class="divider-group" data-group="format">
       <h4><span class="chev">▾</span> Format</h4>
       <div id="formatTabs" class="tab-list"></div>
@@ -579,7 +607,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.5</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.7</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -657,6 +685,8 @@
   const genreGroupLabel = el('genreGroupLabel');
   const genreModeToggle = el('genreModeToggle');
   const clearFiltersBtn = el('clearFilters');
+  const filtersToggleBtn = el('filtersToggleBtn');
+  const filtersCloseBtn = el('filtersCloseBtn');
   const modalRoot = el('modalRoot');
 
   // ---------- large-data storage (IndexedDB) ----------
@@ -1191,16 +1221,16 @@
 
     formatTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       filters.format = (filters.format === t.dataset.val) ? null : t.dataset.val;
-      buildTabs(); render();
+      buildTabs(); render(); closeFiltersDrawer();
     }));
     genreTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       filters.genre = (filters.genre === t.dataset.val) ? null : t.dataset.val;
-      buildTabs(); render();
+      buildTabs(); render(); closeFiltersDrawer();
     }));
     decadeTabs.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
       const v = Number(t.dataset.val);
       filters.decade = (filters.decade === v) ? null : v;
-      buildTabs(); render();
+      buildTabs(); render(); closeFiltersDrawer();
     }));
   }
 
@@ -1748,6 +1778,7 @@
   }
 
   // ---------- insights ----------
+  let timelineCutoff = localStorage.getItem('cratespace:timelineCutoff') || null;
   function monthsBetween(d1, d2){
     const a = new Date(d1), b = new Date(d2);
     return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
@@ -1757,10 +1788,10 @@
   function computeInsights(){
     if(!collection.length) return null;
     const artistMap = new Map(), labelMap = new Map();
-    const genreMap = {}, styleMap = {}, decadeMap = {}, topFormatMap = {}, vinylDescMap = {}, yearCounts = {};
+    const genreMap = {}, styleMap = {}, decadeMap = {}, topFormatMap = {}, formatMixMap = {}, vinylDescMap = {}, yearCounts = {};
     const addedByMonth = new Map();
     let oldest = null, newest = null;
-    const addedDates = [];
+    const addedDates = [], filteredAddedDates = [];
 
     collection.forEach(r=>{
       r.artists.forEach(a=>{
@@ -1782,7 +1813,16 @@
         if(!oldest || r.year < oldest.year) oldest = r;
         if(!newest || r.year > newest.year) newest = r;
       }
-      r.formats.forEach(f=> topFormatMap[f] = (topFormatMap[f]||0)+1);
+      r.formats.forEach(f=>{
+        topFormatMap[f] = (topFormatMap[f]||0)+1;
+        if(f === 'Vinyl'){
+          const matches = (r.formatDescriptions||[]).filter(d=>TARGET_FORMATS.includes(d));
+          if(matches.length) matches.forEach(d=> formatMixMap[d] = (formatMixMap[d]||0)+1);
+          else formatMixMap['Vinyl (other)'] = (formatMixMap['Vinyl (other)']||0)+1;
+        }else{
+          formatMixMap[f] = (formatMixMap[f]||0)+1;
+        }
+      });
       if(r.formats.includes('Vinyl') && r.formatDescriptions){
         r.formatDescriptions.forEach(d=>{
           if(TARGET_FORMATS.includes(d)) vinylDescMap[d] = (vinylDescMap[d]||0)+1;
@@ -1790,17 +1830,21 @@
       }
       if(r.date_added){
         addedDates.push(r.date_added);
-        addedByMonth.set(r.date_added.slice(0,7), (addedByMonth.get(r.date_added.slice(0,7))||0)+1);
+        if(!timelineCutoff || r.date_added >= timelineCutoff){
+          filteredAddedDates.push(r.date_added);
+          const ym = r.date_added.slice(0,7);
+          addedByMonth.set(ym, (addedByMonth.get(ym)||0)+1);
+        }
       }
     });
 
-    addedDates.sort();
-    const firstAdded = addedDates[0] || null;
-    const lastAdded = addedDates[addedDates.length-1] || null;
+    filteredAddedDates.sort();
+    const firstAdded = filteredAddedDates[0] || null;
+    const lastAdded = filteredAddedDates[filteredAddedDates.length-1] || null;
     let avgPerMonth = null;
     if(firstAdded && lastAdded){
       const span = Math.max(1, monthsBetween(firstAdded, lastAdded)+1);
-      avgPerMonth = collection.length / span;
+      avgPerMonth = filteredAddedDates.length / span;
     }
 
     const topArtist = [...artistMap.values()].sort((a,b)=>b.count-a.count)[0] || null;
@@ -1851,7 +1895,7 @@
       artistCount: artistMap.size,
       labelCount: labelMap.size,
       topArtist, topLabel, topGenre, topStyle, topDecade,
-      topFormatMap, vinylDescMap,
+      topFormatMap, formatMixMap, vinylDescMap,
       oldest, newest,
       firstAdded, lastAdded, avgPerMonth, addedByMonth,
       genreMapAll: genreMap, styleMapAll: styleMap, decadeMapAll: decadeMap,
@@ -1995,18 +2039,21 @@
         <h3>The shape of your crate</h3>
         <div class="chart-grid">
           <div class="chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
-          <div class="chart-box"><h4>Top styles</h4><canvas id="chartStyles"></canvas></div>
+          <div class="chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
           <div class="chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
-          <div class="chart-box"><h4>Top labels</h4><canvas id="chartLabels"></canvas></div>
-          <div class="chart-box wide"><h4>Collecting over time</h4><canvas id="chartTimeline"></canvas></div>
+          <div class="chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
+          <div class="chart-box wide">
+            <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+              <span>Collecting over time</span>
+              <span class="timeline-cutoff-ctrl">
+                Hide activity before
+                <input type="date" id="timelineCutoffInput" value="${timelineCutoff||''}">
+                ${timelineCutoff ? '<button class="btn ghost small" id="timelineCutoffClear">Clear</button>' : ''}
+              </span>
+            </h4>
+            <canvas id="chartTimeline"></canvas>
+          </div>
         </div>
-      </div>`;
-
-    const wheelHtml = `
-      <div class="insight-section">
-        <h3>The vinyl wheel</h3>
-        <p class="detail-bio" style="margin-bottom:0;">Every release year in your crate, spiraling out from oldest to newest — bigger and brighter means more records from that year.</p>
-        <div class="wheel-wrap" id="wheelWrap"></div>
       </div>`;
 
     const valueSection = s.priced ? `
@@ -2029,7 +2076,7 @@
       <div class="insight-section">
         <h3>Beyond the metadata</h3>
         <div class="chart-grid">
-          ${Object.keys(s.countryMap).length ? `<div class="chart-box"><h4>Pressing countries</h4><canvas id="chartCountries"></canvas></div>` : ''}
+          ${Object.keys(s.countryMap).length ? `<div class="chart-box"><h4>Pressing countries</h4><div class="chart-tall-wrap" id="chartCountriesWrap"><canvas id="chartCountries"></canvas></div></div>` : ''}
           ${s.topCredits.length ? `<div class="chart-box wide">
             <h4>Most-credited names on your shelf (besides headline artists)</h4>
             <table class="leaderboard">
@@ -2046,16 +2093,26 @@
       <div class="stat-cards">${statCardsHtml}</div>
       ${enrichHtml}
       ${chartsHtml}
-      ${wheelHtml}
       ${valueSection}
       ${enrichedSection}
     `;
 
     el('enrichBtn').addEventListener('click', ()=> runEnrichPass(false));
     el('enrichRefreshBtn').addEventListener('click', ()=> runEnrichPass(true));
+    el('timelineCutoffInput').addEventListener('change', (e)=>{
+      timelineCutoff = e.target.value || null;
+      if(timelineCutoff) localStorage.setItem('cratespace:timelineCutoff', timelineCutoff);
+      else localStorage.removeItem('cratespace:timelineCutoff');
+      renderInsightsView();
+    });
+    const cutoffClearBtn = el('timelineCutoffClear');
+    if(cutoffClearBtn) cutoffClearBtn.addEventListener('click', ()=>{
+      timelineCutoff = null;
+      localStorage.removeItem('cratespace:timelineCutoff');
+      renderInsightsView();
+    });
 
     drawInsightCharts(s);
-    drawVinylWheel(s);
   }
 
   function drawInsightCharts(s){
@@ -2064,17 +2121,23 @@
     Chart.defaults.borderColor = 'rgba(236,227,206,0.12)';
     Chart.defaults.font.family = "'IBM Plex Mono', monospace";
 
-    const formatEntries = Object.entries(s.topFormatMap).sort((a,b)=>b[1]-a[1]);
+    function sizeTallWrap(wrapId, count){
+      const wrap = el(wrapId);
+      if(wrap) wrap.style.height = Math.max(180, count*28+24) + 'px';
+    }
+
+    const formatEntries = Object.entries(s.formatMixMap).sort((a,b)=>b[1]-a[1]);
     makeChart('chartFormat', {
       type:'doughnut',
       data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#16130f', borderWidth:2 }] },
       options:{ plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, font:{size:10} } } } }
     });
 
+    sizeTallWrap('chartStylesWrap', s.topStylesList.length);
     makeChart('chartStyles', {
       type:'bar',
       data:{ labels:s.topStylesList.map(e=>e[0]), datasets:[{ data:s.topStylesList.map(e=>e[1]), backgroundColor:'#d8a51d' }] },
-      options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} } } }
+      options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } } }
     });
 
     const decadeEntries = Object.entries(s.decadeMapAll).sort((a,b)=>Number(a[0])-Number(b[0]));
@@ -2085,10 +2148,11 @@
     });
 
     const topLabels = [...s.labelMapAll.values()].sort((a,b)=>b.count-a.count).slice(0,10);
+    sizeTallWrap('chartLabelsWrap', topLabels.length);
     makeChart('chartLabels', {
       type:'bar',
       data:{ labels:topLabels.map(l=>l.name), datasets:[{ data:topLabels.map(l=>l.count), backgroundColor:'#49603f' }] },
-      options:{ indexAxis:'y', plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} } } }
+      options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } } }
     });
 
     const months = [...s.addedByMonth.keys()].sort();
@@ -2115,46 +2179,13 @@
 
     if(Object.keys(s.countryMap).length){
       const countryEntries = Object.entries(s.countryMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      sizeTallWrap('chartCountriesWrap', countryEntries.length);
       makeChart('chartCountries', {
         type:'bar',
         data:{ labels:countryEntries.map(e=>e[0]), datasets:[{ data:countryEntries.map(e=>e[1]), backgroundColor:'#49603f' }] },
-        options:{ indexAxis:'y', plugins:{legend:{display:false}} }
+        options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ y:{ ticks:{autoSkip:false} } } }
       });
     }
-  }
-
-  function drawVinylWheel(s){
-    const wrap = el('wheelWrap');
-    if(!wrap) return;
-    const years = Object.keys(s.yearCounts).map(Number).sort((a,b)=>a-b);
-    if(!years.length){ wrap.innerHTML = '<p class="detail-loading">No release years on record yet.</p>'; return; }
-    const size=480, cx=size/2, cy=size/2, minR=36, maxR=size/2-30;
-    const maxCount = Math.max(...years.map(y=>s.yearCounts[y]));
-    const pointsPerTurn = 24;
-    const n = years.length;
-    let dots = '', labels = '';
-    years.forEach((y,i)=>{
-      const t = n>1 ? i/(n-1) : 0;
-      const radius = minR + t*(maxR-minR);
-      const angle = (i / pointsPerTurn) * 2*Math.PI - Math.PI/2;
-      const x = cx + radius*Math.cos(angle);
-      const yy = cy + radius*Math.sin(angle);
-      const count = s.yearCounts[y];
-      const rDot = 2.5 + (count/maxCount)*9;
-      const opacity = (0.35 + (count/maxCount)*0.65).toFixed(2);
-      dots += `<circle cx="${x.toFixed(1)}" cy="${yy.toFixed(1)}" r="${rDot.toFixed(1)}" fill="#d8a51d" fill-opacity="${opacity}"><title>${y}: ${count} record${count===1?'':'s'}</title></circle>`;
-      if(i===0 || i===n-1 || (n>10 && i % Math.ceil(n/8) === 0)){
-        const lx = cx + (radius+14)*Math.cos(angle);
-        const ly = cy + (radius+14)*Math.sin(angle);
-        labels += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="9" fill="#7c715a" text-anchor="middle">${y}</text>`;
-      }
-    });
-    wrap.innerHTML = `<svg viewBox="0 0 ${size} ${size}" width="${Math.min(size,480)}" height="${Math.min(size,480)}">
-      <circle cx="${cx}" cy="${cy}" r="${minR-8}" fill="none" stroke="#7c715a" stroke-opacity="0.3"/>
-      ${dots}${labels}
-      <text x="${cx}" y="${cy-4}" font-size="12" fill="#ece3ce" text-anchor="middle" font-family="Oswald, sans-serif">${s.total}</text>
-      <text x="${cx}" y="${cy+12}" font-size="8" fill="#7c715a" text-anchor="middle">RECORDS</text>
-    </svg>`;
   }
 
   let enrichPassRunning = false, enrichPassCancelled = false;
@@ -2740,9 +2771,14 @@
   });
   sortSelect.addEventListener('change', render);
   groupSelect.addEventListener('change', render);
+  function closeFiltersDrawer(){ document.body.classList.remove('filters-open'); }
+  filtersToggleBtn.addEventListener('click', ()=> document.body.classList.add('filters-open'));
+  filtersCloseBtn.addEventListener('click', closeFiltersDrawer);
+
   clearFiltersBtn.addEventListener('click', ()=>{
     filters = { format:null, genre:null, decade:null };
     buildTabs(); render();
+    closeFiltersDrawer();
   });
   document.querySelectorAll('.divider-group h4').forEach(h=>{
     h.addEventListener('click', ()=> h.closest('.divider-group').classList.toggle('collapsed'));
