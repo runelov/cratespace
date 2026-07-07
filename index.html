@@ -240,6 +240,26 @@
     border-radius:3px; padding:32px; position:relative; box-shadow:0 30px 60px rgba(0,0,0,0.5);
   }
   .modal-close{ position:absolute; top:14px; right:16px; background:none; border:none; font-size:22px; cursor:pointer; color:var(--ink); font-family:'Oswald',sans-serif; }
+
+  .confirm-backdrop{
+    position:fixed; inset:0; background:rgba(10,8,6,0.82); z-index:200;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    animation:fadeIn .12s ease;
+  }
+  @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+  .confirm-box{
+    background:var(--ink-soft); border:1px solid var(--line-soft); border-radius:3px;
+    max-width:440px; width:100%; padding:26px 26px 20px; box-shadow:0 30px 60px rgba(0,0,0,0.5);
+  }
+  .confirm-box .confirm-title{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; letter-spacing:0.03em; font-size:16px;
+    color:var(--mustard); margin:0 0 12px;
+  }
+  .confirm-box .confirm-message{
+    font-size:13.5px; line-height:1.7; color:var(--paper-dim); margin:0 0 22px;
+  }
+  .confirm-box .confirm-message b{ color:var(--mustard); }
+  .confirm-actions{ display:flex; justify-content:flex-end; gap:10px; }
   .modal-grid{ display:flex; gap:30px; flex-wrap:wrap; align-items:flex-start; }
   .modal-art{ width:260px; flex-shrink:0; position:sticky; top:20px; }
   .modal-art .disc{ position:absolute; top:6%; right:-18%; width:88%; height:88%; transform:translateX(0) rotate(0); animation:spin 8s linear infinite; }
@@ -1248,6 +1268,43 @@
   }
 
   function escCloseOnce(e){ if(e.key==='Escape') closeModal(); }
+
+  // Themed replacement for window.confirm() — returns a Promise<boolean>.
+  function showConfirm(message, opts){
+    opts = opts || {};
+    const title = opts.title || 'Are you sure?';
+    const confirmLabel = opts.confirmLabel || 'Continue';
+    const cancelLabel = opts.cancelLabel || 'Cancel';
+    return new Promise(resolve=>{
+      const root = document.createElement('div');
+      root.className = 'confirm-backdrop';
+      root.innerHTML = `
+        <div class="confirm-box">
+          <div class="confirm-title">${escapeHtml(title)}</div>
+          <div class="confirm-message">${message}</div>
+          <div class="confirm-actions">
+            <button class="btn ghost small" id="confirmCancelBtn">${escapeHtml(cancelLabel)}</button>
+            <button class="btn small" id="confirmOkBtn">${escapeHtml(confirmLabel)}</button>
+          </div>
+        </div>`;
+      document.body.appendChild(root);
+      function cleanup(result){
+        document.removeEventListener('keydown', onKey);
+        root.remove();
+        resolve(result);
+      }
+      function onKey(e){
+        if(e.key === 'Escape') cleanup(false);
+        if(e.key === 'Enter') cleanup(true);
+      }
+      document.addEventListener('keydown', onKey);
+      root.addEventListener('click', e=>{ if(e.target === root) cleanup(false); });
+      root.querySelector('#confirmCancelBtn').addEventListener('click', ()=> cleanup(false));
+      root.querySelector('#confirmOkBtn').addEventListener('click', ()=> cleanup(true));
+      root.querySelector('#confirmOkBtn').focus();
+    });
+  }
+
   function closeModal(){
     modalRoot.innerHTML = '';
     document.removeEventListener('keydown', escCloseOnce);
@@ -1956,7 +2013,7 @@
     }
     const items = force ? collection : collection.filter(r => !enrichCache[r.id]);
     if(force){
-      const ok = confirm(`This re-checks full details for all ${collection.length} records, one Discogs request each. Continue?`);
+      const ok = await showConfirm(`This re-checks full details for all <b>${collection.length}</b> records, one Discogs request each.`, { title:'Refresh all enrichment data?', confirmLabel:'Refresh all' });
       if(!ok) return;
     }
     enrichPassRunning = true; enrichPassCancelled = false;
@@ -2006,7 +2063,7 @@
       return;
     }
     if(force){
-      const ok = confirm('This re-checks the price of every record in this view, even ones already priced. For a large collection that means one Discogs request per record and can take a long time. Continue?');
+      const ok = await showConfirm('This re-checks the price of every record in this view, even ones already priced. For a large collection that means one Discogs request per record and can take a long time.', { title:'Refresh all prices?', confirmLabel:'Refresh all' });
       if(!ok) return;
     }
     valuePassRunning = true;
@@ -2095,7 +2152,7 @@
     if(full && existingItems.length === 0){
       const priorRaw = loadJSON(collectionKey(username));
       if(priorRaw?.items?.length){
-        const ok = confirm(`This re-downloads all ${priorRaw.items.length} records from Discogs from scratch instead of just checking for new ones. For a large crate that can take a while. Continue?`);
+        const ok = await showConfirm(`This re-downloads all <b>${priorRaw.items.length}</b> records from Discogs from scratch instead of just checking for new ones. For a large crate that can take a while.`, { title:'Full resync your crate?', confirmLabel:'Full resync' });
         if(!ok) return;
       }
     }
@@ -2147,7 +2204,7 @@
     if(full && existingItems.length === 0){
       const priorRaw = loadJSON(wantlistKey(username));
       if(priorRaw?.items?.length){
-        const ok = confirm(`This re-downloads your entire wantlist (${priorRaw.items.length} items) from scratch instead of just checking for new ones. Continue?`);
+        const ok = await showConfirm(`This re-downloads your entire wantlist (<b>${priorRaw.items.length}</b> items) from scratch instead of just checking for new ones.`, { title:'Full resync your wantlist?', confirmLabel:'Full resync' });
         if(!ok) return;
       }
     }
@@ -2477,9 +2534,10 @@
       const wantCount = payload.wantlist?.items?.length || 0;
       const existingHasData = collection.length || wantlist.length;
       const msg = existingHasData
-        ? `This backup for "${payload.username}" contains ${crateCount} crate records and ${wantCount} wantlist items. It will replace what's cached in this browser now, plus pricing/deal/bio data. Continue?`
-        : `Pull the backup for "${payload.username}" — ${crateCount} crate records and ${wantCount} wantlist items?`;
-      if(!confirm(msg)){ ghNote.innerHTML = ghNoteDefault; ghPushBtn.disabled=false; ghPullBtn.disabled=false; return; }
+        ? `This backup for "<b>${escapeHtml(payload.username)}</b>" contains <b>${crateCount}</b> crate records and <b>${wantCount}</b> wantlist items. It will replace what's cached in this browser now, plus pricing/deal/bio data.`
+        : `Pull the backup for "<b>${escapeHtml(payload.username)}</b>" — <b>${crateCount}</b> crate records and <b>${wantCount}</b> wantlist items?`;
+      const ok = await showConfirm(msg, { title:'Replace local data?', confirmLabel:'Pull & replace' });
+      if(!ok){ ghNote.innerHTML = ghNoteDefault; ghPushBtn.disabled=false; ghPullBtn.disabled=false; return; }
       const { failures } = applyBackupPayload(payload);
       reportImportOutcome(payload.username, failures, crateCount, wantCount);
       location.reload();
