@@ -193,15 +193,28 @@
       fxRates = cached;
       return;
     }
-    try{
-      const resp = await fetch('https://api.frankfurter.app/latest?from=EUR');
-      if(!resp.ok) throw new Error('bad response');
-      const data = await resp.json();
-      fxRates = { rates: Object.assign({ EUR:1 }, data.rates), fetchedAt: Date.now() };
-      saveJSON('cratespace:fxRates', fxRates);
-    }catch(e){
-      if(cached) fxRates = cached; // stale is better than nothing
+    // Served as a static JSON file off a CDN rather than a custom API server —
+    // CDNs send an unconditional Access-Control-Allow-Origin: * with no
+    // origin-checking logic, which tends to work even from a null origin
+    // (e.g. a page opened via file://), unlike some API servers.
+    const urls = [
+      'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json',
+      'https://latest.currency-api.pages.dev/v1/currencies/eur.json'
+    ];
+    for(const url of urls){
+      try{
+        const resp = await fetch(url);
+        if(!resp.ok) continue;
+        const data = await resp.json();
+        const raw = data.eur || {};
+        const rates = { EUR: 1 };
+        Object.keys(raw).forEach(k => { rates[k.toUpperCase()] = raw[k]; });
+        fxRates = { rates, fetchedAt: Date.now() };
+        saveJSON('cratespace:fxRates', fxRates);
+        return;
+      }catch(e){ /* try next mirror */ }
     }
+    if(cached) fxRates = cached; // stale is better than nothing
   }
   function convertCurrency(amount, from, to){
     if(!from || !to || from === to || !fxRates || !fxRates.rates) return { amount, currency: from || to };
