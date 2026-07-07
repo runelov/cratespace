@@ -145,12 +145,12 @@
     catch(e){ return false; }
   }
 
-  function loadAllCaches(){
-    priceCache = loadJSON('cratespace:prices') || {};
-    artistCache = loadJSON('cratespace:artists') || {};
-    labelCache = loadJSON('cratespace:labels') || {};
-    marketCache = loadJSON('cratespace:market') || {};
-    enrichCache = loadJSON('cratespace:enrich') || {};
+  async function loadAllCaches(){
+    priceCache = (await idbGet('cratespace:prices')) || {};
+    artistCache = (await idbGet('cratespace:artists')) || {};
+    labelCache = (await idbGet('cratespace:labels')) || {};
+    marketCache = (await idbGet('cratespace:market')) || {};
+    enrichCache = (await idbGet('cratespace:enrich')) || {};
     const savedCondition = loadJSON('cratespace:assumedCondition');
     if(savedCondition) assumedConditionSelect.value = savedCondition;
     displayCurrencySelect.value = displayCurrency;
@@ -163,11 +163,11 @@
       else if(currentView.type === 'artist' || currentView.type === 'label') refreshAfterMutation();
     });
   }
-  function savePriceCache(){ saveJSON('cratespace:prices', priceCache); }
-  function saveMarketCache(){ saveJSON('cratespace:market', marketCache); }
-  function saveEnrichCache(){ saveJSON('cratespace:enrich', enrichCache); }
-  function saveArtistCache(){ saveJSON('cratespace:artists', artistCache); }
-  function saveLabelCache(){ saveJSON('cratespace:labels', labelCache); }
+  async function savePriceCache(){ await idbSet('cratespace:prices', priceCache); }
+  async function saveMarketCache(){ await idbSet('cratespace:market', marketCache); }
+  async function saveEnrichCache(){ await idbSet('cratespace:enrich', enrichCache); }
+  async function saveArtistCache(){ await idbSet('cratespace:artists', artistCache); }
+  async function saveLabelCache(){ await idbSet('cratespace:labels', labelCache); }
 
   function fmtDate(iso){
     const d = new Date(iso);
@@ -370,7 +370,7 @@
     return 0;
   }
 
-  function storeEnrichmentFromReleaseData(releaseId, data){
+  async function storeEnrichmentFromReleaseData(releaseId, data){
     const totalDurationSec = (data.tracklist||[]).reduce((sum,t)=> sum + parseDurationToSeconds(t.duration), 0);
     const credits = (data.extraartists||[]).map(a=>({ id:a.id, name:(a.name||'').replace(/\s\(\d+\)$/,''), role:a.role||'' }));
     const entry = {
@@ -382,7 +382,7 @@
       fetchedAt: Date.now()
     };
     enrichCache[releaseId] = entry;
-    saveEnrichCache();
+    await saveEnrichCache();
     return entry;
   }
 
@@ -393,7 +393,7 @@
     const data = await resp.json();
     // Opening a record's modal already fetches this full payload for the tracklist —
     // piggyback the Insights enrichment fields off it for free, no extra request.
-    storeEnrichmentFromReleaseData(releaseId, data);
+    await storeEnrichmentFromReleaseData(releaseId, data);
     const result = { tracklist: data.tracklist || [], notes: data.notes || '' };
     trackCache.set(releaseId, result);
     return result;
@@ -425,7 +425,7 @@
       };
     }
     marketCache[releaseId] = entry;
-    saveMarketCache();
+    await saveMarketCache();
     return entry;
   }
 
@@ -457,7 +457,7 @@
       }
     }
     priceCache[releaseId] = entry;
-    savePriceCache();
+    await savePriceCache();
     return entry;
   }
 
@@ -472,7 +472,7 @@
       entry = { name:'', profile:'', error:true, fetchedAt: Date.now() };
     }
     artistCache[id] = entry;
-    saveArtistCache();
+    await saveArtistCache();
     return entry;
   }
 
@@ -487,7 +487,7 @@
       entry = { name:'', profile:'', error:true, fetchedAt: Date.now() };
     }
     labelCache[id] = entry;
-    saveLabelCache();
+    await saveLabelCache();
     return entry;
   }
 
@@ -2094,6 +2094,12 @@
       await idbDelete(collectionKey(username));
       await idbDelete(wantlistKey(username));
     }
+    await idbDelete('cratespace:prices');
+    await idbDelete('cratespace:artists');
+    await idbDelete('cratespace:labels');
+    await idbDelete('cratespace:market');
+    await idbDelete('cratespace:enrich');
+    // Clean up any leftovers from before these moved to IndexedDB.
     localStorage.removeItem('cratespace:prices');
     localStorage.removeItem('cratespace:artists');
     localStorage.removeItem('cratespace:labels');
@@ -2133,10 +2139,10 @@
     const wantCount = payload.wantlist?.items?.length || 0;
     const failures = [];
 
-    // Crate and wantlist go to IndexedDB, which has a much larger quota than
-    // localStorage (especially on iOS Safari) — they no longer compete with
-    // anything else for space. The smaller caches below still use
-    // localStorage; clear old copies first so they don't pile up.
+    // Everything here goes to IndexedDB now, which has no meaningful size
+    // ceiling (unlike localStorage, which is especially tight on iOS Safari
+    // and was the actual cause of "value data" failing to save before).
+    // Clean up any leftover localStorage copies from before this moved.
     localStorage.removeItem('cratespace:prices');
     localStorage.removeItem('cratespace:market');
     localStorage.removeItem('cratespace:artists');
@@ -2145,11 +2151,11 @@
 
     if(payload.collection && !(await idbSetSafe(collectionKey(payload.username), payload.collection))) failures.push('crate');
     if(payload.wantlist && !(await idbSetSafe(wantlistKey(payload.username), payload.wantlist))) failures.push('wantlist');
-    if(!saveJSON('cratespace:prices', payload.prices || {})) failures.push('value data');
-    if(!saveJSON('cratespace:market', payload.market || {})) failures.push('deal-check data');
-    if(!saveJSON('cratespace:artists', payload.artists || {})) failures.push('artist bios');
-    if(!saveJSON('cratespace:labels', payload.labels || {})) failures.push('label bios');
-    if(!saveJSON('cratespace:enrich', payload.enrich || {})) failures.push('enrichment data (playtime/credits/country)');
+    if(!(await idbSetSafe('cratespace:prices', payload.prices || {}))) failures.push('value data');
+    if(!(await idbSetSafe('cratespace:market', payload.market || {}))) failures.push('deal-check data');
+    if(!(await idbSetSafe('cratespace:artists', payload.artists || {}))) failures.push('artist bios');
+    if(!(await idbSetSafe('cratespace:labels', payload.labels || {}))) failures.push('label bios');
+    if(!(await idbSetSafe('cratespace:enrich', payload.enrich || {}))) failures.push('enrichment data (playtime/credits/country)');
     if(payload.assumedCondition) saveJSON('cratespace:assumedCondition', payload.assumedCondition);
     localStorage.setItem('cratespace:lastUser', payload.username);
     return { failures, crateCount, wantCount };
@@ -2157,8 +2163,7 @@
 
   function reportImportOutcome(username, failures, crateCount, wantCount){
     if(failures.length){
-      const crateFailed = failures.includes('crate');
-      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Old cached price/enrichment data was already cleared to make room before this was attempted, so ${crateFailed ? "even your crate and wantlist alone don't fit in what this browser allows — that's a hard limit of this device/browser (iOS Safari in particular caps this well below desktop browsers), not something clearing more space will fix" : "the crate and wantlist saved fine; only the optional extras above didn't fit"}. Whatever did fit is saved; the rest was skipped rather than silently lost.`);
+      alert(`Something went wrong saving: ${failures.join(', ')}. This shouldn't normally happen now that everything is stored in IndexedDB rather than the much smaller localStorage — it may be worth checking this device isn't critically low on storage overall, or trying again. Whatever did save is intact; the rest was skipped rather than silently lost.`);
     }else if(crateCount === 0 && wantCount === 0){
       alert(`Heads up: this backup itself contains 0 crate records and 0 wantlist items for "${username}" — there's nothing to restore from it. This usually means it was pushed before a sync had completed in that browser.`);
     }
@@ -2432,7 +2437,7 @@
 
   // ---------- boot ----------
   (async function init(){
-    loadAllCaches();
+    await loadAllCaches();
     const savedCollapsed = localStorage.getItem('cratespace:setupCollapsed');
     const hasExplicitPreference = savedCollapsed !== null;
     if(hasExplicitPreference) setSetupCollapsed(savedCollapsed === '1', false);
