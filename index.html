@@ -98,10 +98,31 @@
     .brand small{ font-size:9.5px; letter-spacing:0.06em; }
     .top-row{ align-items:center; }
     .sync-note{ font-size:10.5px; }
-    .nav-tabs{ margin-top:10px; }
-    .nav-tab{ padding:8px 10px; font-size:11px; }
-    .value-bar{ padding:10px 12px; }
-    .search-row{ margin-top:10px; }
+
+    .nav-tabs{
+      margin-top:10px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none; padding-bottom:2px;
+    }
+    .nav-tabs::-webkit-scrollbar{ display:none; }
+    .nav-tab{ padding:8px 10px; font-size:11px; flex-shrink:0; }
+
+    .value-bar{ padding:10px 12px; flex-direction:column; align-items:stretch; gap:8px; }
+    .value-bar-toggle{
+      display:flex; align-items:center; justify-content:space-between; width:100%;
+      background:none; border:none; color:var(--line); font-family:'IBM Plex Mono',monospace;
+      font-size:11px; padding:0; cursor:pointer;
+    }
+    .value-bar-controls{ display:none; flex-direction:column; align-items:stretch; gap:10px; }
+    .value-bar.tools-open .value-bar-controls{ display:flex; }
+    .value-bar .progress{ min-width:0; }
+
+    .search-row{ margin-top:10px; flex-direction:column; align-items:stretch; }
+    .search-row-controls{
+      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
+      padding-bottom:2px;
+    }
+    .search-row-controls::-webkit-scrollbar{ display:none; }
+    .search-row-controls > *{ flex-shrink:0; }
   }
   .sync-note b{ color:var(--paper-dim); }
   .filters-toggle-btn{ display:none; }
@@ -129,6 +150,8 @@
   .value-bar .stat b{ color:var(--mustard); font-size:15px; }
   .value-bar .stat .sub{ color:var(--line); font-size:10.5px; display:block; margin-top:2px; }
   .value-bar .progress{ font-size:11px; color:var(--line); flex:1; min-width:180px; }
+  .value-bar-toggle{ display:none; }
+  .value-bar-controls{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; flex:1; }
   .assume-label{
     font-size:11px; color:var(--line); display:flex; align-items:center; gap:6px;
     font-family:'IBM Plex Mono',monospace;
@@ -141,6 +164,7 @@
     color:var(--paper); padding:11px 14px; border-radius:2px; font-size:14px; outline:none;
   }
   .search-row input[type="search"]:focus{ border-color:var(--mustard); }
+  .search-row-controls{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
   select{
     background:var(--ink-soft); color:var(--paper); border:1px solid var(--line-soft);
     padding:10px 12px; border-radius:2px; font-size:12px; font-family:'IBM Plex Mono',monospace;
@@ -149,6 +173,14 @@
     font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--mustard);
     border:1px dashed var(--mustard-dim); padding:8px 10px; border-radius:2px; white-space:nowrap;
   }
+  .view-mode-toggle{ display:flex; border:1px solid var(--line-soft); border-radius:2px; overflow:hidden; }
+  .view-mode-toggle button{
+    background:var(--ink-soft); border:none; border-right:1px solid var(--line-soft); color:var(--line);
+    padding:8px 11px; font-size:14px; cursor:pointer; line-height:1;
+  }
+  .view-mode-toggle button:last-child{ border-right:none; }
+  .view-mode-toggle button.active{ background:var(--mustard); color:var(--ink); }
+  .view-mode-toggle button:hover:not(.active){ color:var(--paper); }
 
   /* ---------- layout ---------- */
   .layout{ display:flex; gap:26px; padding:24px 28px 80px; align-items:flex-start; }
@@ -249,6 +281,37 @@
   .artist-link, .label-link{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
   .artist-link:hover, .label-link:hover{ color:var(--mustard); }
   .modal-info .label-link{ color:var(--rust); text-decoration:underline dotted; cursor:pointer; }
+
+  /* ---------- view density: compact ---------- */
+  .grid-compact{ grid-template-columns:repeat(auto-fill, minmax(108px,1fr)); gap:16px 12px; }
+  .grid-compact .sleeve-meta{ margin-top:7px; }
+  .grid-compact .sleeve-meta .artist{ font-size:9px; }
+  .grid-compact .sleeve-meta .title{ font-size:11.5px; margin-top:1px; }
+  .grid-compact .sleeve-meta .sub{ font-size:9px; margin-top:2px; }
+  .grid-compact .price-badge{ font-size:9px; padding:2px 5px; top:-6px; left:-6px; }
+  .grid-compact .want-ribbon{ font-size:8px; padding:2px 7px; }
+
+  /* ---------- view density: list ---------- */
+  .grid-list{ display:flex; flex-direction:column; gap:0; }
+  .sleeve-list{
+    display:flex; align-items:center; gap:12px; padding:9px 4px;
+    border-bottom:1px solid var(--line-soft); cursor:pointer; position:relative;
+  }
+  .sleeve-list .list-thumb{
+    width:46px; height:46px; flex-shrink:0; border-radius:2px; overflow:hidden;
+    background:var(--paper-dim);
+  }
+  .sleeve-list .list-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .sleeve-list .list-thumb .no-art{ width:100%; height:100%; background:var(--paper-dim); }
+  .sleeve-list .list-info{ min-width:0; flex:1; }
+  .sleeve-list .list-title{ font-size:13px; color:var(--paper); font-weight:600; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sleeve-list .list-sub{ font-size:10.5px; color:var(--line); font-family:'IBM Plex Mono',monospace; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sleeve-list .list-sub .artist-link{ color:var(--mustard); }
+  .sleeve-list .list-price{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--mustard); flex-shrink:0; }
+  .sleeve-list .list-want{
+    font-family:'Oswald',sans-serif; text-transform:uppercase; font-size:8.5px; letter-spacing:0.06em;
+    color:var(--rust); border:1px solid var(--rust); padding:2px 6px; border-radius:2px; flex-shrink:0;
+  }
 
   /* ---------- states ---------- */
   .state{ text-align:center; padding:100px 20px; color:var(--line); }
@@ -496,7 +559,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.7</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.9</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -533,43 +596,53 @@
 
   <div class="value-bar" id="valueBar" style="display:none;">
     <div class="stat">Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span></div>
-    <label class="assume-label" title="Records with a known condition on Discogs always use their own condition's price. This only applies to records with no condition on record.">
-      Assume condition:
-      <select id="assumedConditionSelect">
-        <option value="Mint (M)">Mint (M)</option>
-        <option value="Near Mint (NM or M-)">Near Mint (NM or M-)</option>
-        <option value="Very Good Plus (VG+)" selected>Very Good Plus (VG+)</option>
-        <option value="Very Good (VG)">Very Good (VG)</option>
-        <option value="Good Plus (G+)">Good Plus (G+)</option>
-        <option value="Good (G)">Good (G)</option>
-        <option value="Fair (F)">Fair (F)</option>
-        <option value="Poor (P)">Poor (P)</option>
-      </select>
-    </label>
-    <div class="progress" id="valueProgress"></div>
-    <button class="btn small" id="valueBtn" title="Price only records that haven't been looked up yet">Estimate value</button>
-    <button class="btn ghost small" id="valueRefreshBtn" title="Re-check the price of every record, even ones already priced">Refresh all</button>
+    <button class="value-bar-toggle" id="valueBarToggle" title="Value tools">⚙ Tools</button>
+    <div class="value-bar-controls" id="valueBarControls">
+      <label class="assume-label" title="Records with a known condition on Discogs always use their own condition's price. This only applies to records with no condition on record.">
+        Assume condition:
+        <select id="assumedConditionSelect">
+          <option value="Mint (M)">Mint (M)</option>
+          <option value="Near Mint (NM or M-)">Near Mint (NM or M-)</option>
+          <option value="Very Good Plus (VG+)" selected>Very Good Plus (VG+)</option>
+          <option value="Very Good (VG)">Very Good (VG)</option>
+          <option value="Good Plus (G+)">Good Plus (G+)</option>
+          <option value="Good (G)">Good (G)</option>
+          <option value="Fair (F)">Fair (F)</option>
+          <option value="Poor (P)">Poor (P)</option>
+        </select>
+      </label>
+      <div class="progress" id="valueProgress"></div>
+      <button class="btn small" id="valueBtn" title="Price only records that haven't been looked up yet">Estimate value</button>
+      <button class="btn ghost small" id="valueRefreshBtn" title="Re-check the price of every record, even ones already priced">Refresh all</button>
+    </div>
   </div>
 
   <div class="search-row" id="searchRow" style="display:none;">
     <input type="search" id="searchInput" placeholder="Search artist, title, label, catalog no…">
-    <select id="sortSelect">
-      <option value="artist-asc">Artist A–Z</option>
-      <option value="title-asc">Title A–Z</option>
-      <option value="year-desc">Year, newest</option>
-      <option value="year-asc">Year, oldest</option>
-      <option value="added-desc">Recently added</option>
-      <option value="value-desc">Value, highest</option>
-      <option value="value-asc">Value, lowest</option>
-    </select>
-    <select id="groupSelect">
-      <option value="none">Browse: all records</option>
-      <option value="artist">Browse: by artist</option>
-      <option value="year">Browse: by release year</option>
-      <option value="label">Browse: by label</option>
-    </select>
-    <span class="count-tag" id="countTag">0 records</span>
-    <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
+    <div class="search-row-controls">
+      <select id="sortSelect">
+        <option value="artist-asc">Artist A–Z</option>
+        <option value="title-asc">Title A–Z</option>
+        <option value="year-desc">Year, newest</option>
+        <option value="year-asc">Year, oldest</option>
+        <option value="added-desc">Recently added</option>
+        <option value="value-desc">Value, highest</option>
+        <option value="value-asc">Value, lowest</option>
+      </select>
+      <select id="groupSelect">
+        <option value="none">Browse: all records</option>
+        <option value="artist">Browse: by artist</option>
+        <option value="year">Browse: by release year</option>
+        <option value="label">Browse: by label</option>
+      </select>
+      <div class="view-mode-toggle" id="viewModeToggle" title="How records are displayed">
+        <button data-mode="large" title="Large covers">▦</button>
+        <button data-mode="compact" title="Compact covers">▤</button>
+        <button data-mode="list" title="List view">☰</button>
+      </div>
+      <span class="count-tag" id="countTag">0 records</span>
+      <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
+    </div>
   </div>
 </header>
 
@@ -607,7 +680,7 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.7</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.9</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
@@ -621,6 +694,7 @@
   let filtered = [];
   let filters = { format:null, genre:null, decade:null };
   let genreMode = 'style';         // 'genre' | 'style' | 'both'
+  let viewMode = localStorage.getItem('cratespace:viewMode') || (matchMedia('(max-width:760px)').matches ? 'compact' : 'large');
   let searchTerm = "";
   let activeDataset = 'crate';     // 'crate' | 'wantlist'
   let currentView = { type:'browse' };
@@ -667,6 +741,8 @@
   const valueProgress = el('valueProgress');
   const valueBtn = el('valueBtn');
   const valueRefreshBtn = el('valueRefreshBtn');
+  const valueBarToggle = el('valueBarToggle');
+  const viewModeToggle = el('viewModeToggle');
   const assumedConditionSelect = el('assumedConditionSelect');
   const searchRow = el('searchRow');
   const layout = el('layout');
@@ -1136,7 +1212,7 @@
     const isWant = activeDataset === 'wantlist';
     const mode = groupSelect.value;
     if(mode === 'none'){
-      grid.innerHTML = `<div class="grid">${filtered.map(r => sleeveCard(r, isWant)).join('')}</div>`;
+      grid.innerHTML = `<div class="${gridClass()}">${filtered.map(r => sleeveCard(r, isWant)).join('')}</div>`;
     }else{
       const groups = new Map();
       filtered.forEach(r=>{
@@ -1158,12 +1234,14 @@
               <h3>${escapeHtml(key)}</h3>
               <span class="group-count">${items.length} record${items.length===1?'':'s'}</span>
             </div>
-            <div class="grid">${items.map(r=>sleeveCard(r, isWant)).join('')}</div>
+            <div class="${gridClass()}">${items.map(r=>sleeveCard(r, isWant)).join('')}</div>
           </div>`;
       }).join('');
     }
     wireSleeveClicks(grid);
   }
+
+  function gridClass(){ return `grid grid-${viewMode}`; }
 
   function sleeveCard(r, isWant){
     const art = r.cover ? `<img src="${r.cover}" alt="${escapeHtml(r.title)} cover" loading="lazy">`
@@ -1175,6 +1253,21 @@
     const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
     const firstLabel = r.labels[0];
     const labelLink = firstLabel ? `<span class="label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(firstLabel.name)}">${escapeHtml(firstLabel.name)}</span>` : '—';
+
+    if(viewMode === 'list'){
+      const listPrice = iv ? `<span class="list-price">${iv.exact?'':'~'}${fmtMoney(iv.amount, iv.currency)}</span>` : '';
+      const listWant = isWant ? `<span class="list-want">Want</span>` : '';
+      return `
+        <div class="sleeve sleeve-list" data-id="${r.id}" tabindex="0">
+          <div class="list-thumb">${art}</div>
+          <div class="list-info">
+            <div class="list-title">${escapeHtml(r.title)}</div>
+            <div class="list-sub">${artistLinks} · ${r.year||'—'} · ${labelLink}</div>
+          </div>
+          ${listPrice}${listWant}
+        </div>`;
+    }
+
     return `
       <div class="sleeve" data-id="${r.id}" tabindex="0">
         <div class="sleeve-art">
@@ -1254,6 +1347,25 @@
       buildTabs(); render();
     });
   });
+
+  valueBarToggle.addEventListener('click', ()=>{
+    valueBar.classList.toggle('tools-open');
+  });
+
+  function updateViewModeButtons(){
+    viewModeToggle.querySelectorAll('button').forEach(b=> b.classList.toggle('active', b.dataset.mode === viewMode));
+  }
+  viewModeToggle.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      viewMode = btn.dataset.mode;
+      localStorage.setItem('cratespace:viewMode', viewMode);
+      updateViewModeButtons();
+      if(currentView.type === 'browse') render();
+      else if(currentView.type === 'gaps') renderGapsView();
+      else if(currentView.type === 'artist' || currentView.type === 'label') refreshAfterMutation();
+    });
+  });
+  updateViewModeButtons();
 
   // ---------- modal ----------
   async function openModal(id){
@@ -1578,13 +1690,13 @@
     const wantGrid = el('detailWantGrid');
     if(crateGrid){
       crateGrid.innerHTML = inCrate.length
-        ? `<div class="grid">${inCrate.map(r=>sleeveCard(r,false)).join('')}</div>`
+        ? `<div class="${gridClass()}">${inCrate.map(r=>sleeveCard(r,false)).join('')}</div>`
         : `<div class="empty-note">Nothing by this one in your crate yet.</div>`;
       wireSleeveClicks(crateGrid);
     }
     if(wantGrid){
       wantGrid.innerHTML = inWant.length
-        ? `<div class="grid">${inWant.map(r=>sleeveCard(r,true)).join('')}</div>`
+        ? `<div class="${gridClass()}">${inWant.map(r=>sleeveCard(r,true)).join('')}</div>`
         : `<div class="empty-note">Nothing by this one on your wantlist.</div>`;
       wireSleeveClicks(wantGrid);
     }
@@ -1695,7 +1807,7 @@
               <span class="gap-owned-badge">${g.ownedCount} owned</span>
               <span class="gap-want-count">${g.wanted.length} wanted</span>
             </div>
-            <div class="grid">
+            <div class="${gridClass()}">
               ${g.wanted.map(r => `<div class="gap-item">${sleeveCard(r, true)}${gapDealHtml(r)}</div>`).join('')}
             </div>
           </div>`).join('')
@@ -1756,14 +1868,14 @@
     const todo = force ? items : items.filter(r => !marketCache[r.id]);
     dealPassRunning = true; dealPassCancelled = false;
     let done = 0;
+    let erroredMessage = null;
     for(const r of todo){
       if(dealPassCancelled) break;
       try{
         await fetchMarketStats(r.id, force);
         if(!priceCache[r.id] || force) await fetchPriceSuggestions(r.id, force).catch(()=>{});
       }catch(err){
-        const p = el('gapsProgress');
-        if(p) p.textContent = err.message;
+        erroredMessage = err.message;
         break;
       }
       done++;
@@ -1775,6 +1887,10 @@
     }
     dealPassRunning = false;
     if(currentView.type === 'gaps') renderGapsView();
+    if(erroredMessage){
+      const p = el('gapsProgress');
+      if(p) p.textContent = `Stopped after an error (${done} checked first): ${erroredMessage}`;
+    }
   }
 
   // ---------- insights ----------
@@ -2203,10 +2319,11 @@
     }
     enrichPassRunning = true; enrichPassCancelled = false;
     let done = 0;
+    let erroredMessage = null;
     for(const r of items){
       if(enrichPassCancelled) break;
       try{ await fetchEnrichment(r.id, force); }
-      catch(err){ const p = el('enrichProgress'); if(p) p.textContent = err.message; break; }
+      catch(err){ erroredMessage = err.message; break; }
       done++;
       if(done % 5 === 0 || done === items.length){
         const p = el('enrichProgress');
@@ -2216,6 +2333,10 @@
     }
     enrichPassRunning = false;
     if(currentView.type === 'insights') renderInsightsView();
+    if(erroredMessage){
+      const p = el('enrichProgress');
+      if(p) p.textContent = `Stopped after an error (${done} checked first): ${erroredMessage}`;
+    }
   }
 
   // ---------- value pass (opt-in background pricing) ----------
@@ -2257,12 +2378,13 @@
     updateValueBar();
     const items = force ? activeItems() : activeItems().filter(r => !priceCache[r.id]);
     let done = 0;
+    let erroredMessage = null;
     for(const r of items){
       if(valuePassCancelled) break;
       try{
         await fetchPriceSuggestions(r.id, force);
       }catch(err){
-        valueProgress.textContent = err.message;
+        erroredMessage = err.message;
         break;
       }
       done++;
@@ -2273,7 +2395,11 @@
       }
     }
     valuePassRunning = false;
-    valueProgress.textContent = valuePassCancelled ? 'Stopped — click again to resume.' : (items.length ? 'Done.' : 'Nothing new to price.');
+    if(erroredMessage){
+      valueProgress.textContent = `Stopped after an error (${done} priced first): ${erroredMessage}`;
+    }else{
+      valueProgress.textContent = valuePassCancelled ? 'Stopped — click again to resume.' : (items.length ? 'Done.' : 'Nothing new to price.');
+    }
     updateValueBar();
     render();
   }
