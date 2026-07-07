@@ -433,6 +433,14 @@
         <button class="btn ghost small" id="importBtn" title="Load a previously exported file">⇧ Import data</button>
         <input type="file" id="importFile" accept="application/json" style="display:none;">
       </div>
+      <div class="sync-panel" style="margin-top:8px;">
+        <input id="ghRepo" type="text" placeholder="github-username/repo" autocomplete="off" style="min-width:190px;">
+        <input id="ghPath" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" style="min-width:150px;">
+        <input id="ghToken" type="password" placeholder="github token" autocomplete="off">
+        <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
+        <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
+      </div>
+      <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
       <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use Export here, then Import that file there — it's a plain file you keep yourself, nothing is uploaded anywhere.</div>
     </div>
   </div>
@@ -556,6 +564,13 @@
   const exportBtn = el('exportBtn');
   const importBtn = el('importBtn');
   const importFile = el('importFile');
+  const ghRepo = el('ghRepo');
+  const ghPath = el('ghPath');
+  const ghToken = el('ghToken');
+  const ghPushBtn = el('ghPushBtn');
+  const ghPullBtn = el('ghPullBtn');
+  const ghNote = el('ghNote');
+  const ghNoteDefault = ghNote.innerHTML;
   const syncNote = el('syncNote');
   const navTabs = el('navTabs');
   const tabCrate = el('tabCrate');
@@ -612,19 +627,9 @@
     const savedCondition = loadJSON('cratespace:assumedCondition');
     if(savedCondition) assumedConditionSelect.value = savedCondition;
   }
-  let savePriceDebounce, saveMarketDebounce, saveEnrichDebounce;
-  function savePriceCache(){
-    clearTimeout(savePriceDebounce);
-    savePriceDebounce = setTimeout(()=> saveJSON('cratespace:prices', priceCache), 800);
-  }
-  function saveMarketCache(){
-    clearTimeout(saveMarketDebounce);
-    saveMarketDebounce = setTimeout(()=> saveJSON('cratespace:market', marketCache), 800);
-  }
-  function saveEnrichCache(){
-    clearTimeout(saveEnrichDebounce);
-    saveEnrichDebounce = setTimeout(()=> saveJSON('cratespace:enrich', enrichCache), 800);
-  }
+  function savePriceCache(){ saveJSON('cratespace:prices', priceCache); }
+  function saveMarketCache(){ saveJSON('cratespace:market', marketCache); }
+  function saveEnrichCache(){ saveJSON('cratespace:enrich', enrichCache); }
   function saveArtistCache(){ saveJSON('cratespace:artists', artistCache); }
   function saveLabelCache(){ saveJSON('cratespace:labels', labelCache); }
 
@@ -2205,9 +2210,9 @@
     showState(`<h2>Cache cleared</h2><p>Enter your token (if needed) and sync again to reload your crate.</p>`);
   });
 
-  exportBtn.addEventListener('click', ()=>{
+  function buildBackupPayload(){
     const username = usernameInput.value.trim() || localStorage.getItem('cratespace:lastUser') || '';
-    const payload = {
+    return {
       crateSpaceBackup: 1,
       exportedAt: new Date().toISOString(),
       username,
@@ -2220,6 +2225,11 @@
       enrich: enrichCache,
       assumedCondition: assumedConditionSelect.value
     };
+  }
+
+  exportBtn.addEventListener('click', ()=>{
+    const payload = buildBackupPayload();
+    const username = payload.username;
     const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2233,6 +2243,37 @@
   });
 
   importBtn.addEventListener('click', ()=> importFile.click());
+  function isValidBackupPayload(payload){
+    return !!(payload && (payload.crateSpaceBackup === 1 || payload.deadwaxBackup === 1) && payload.username);
+  }
+
+  // Writes a backup payload's contents into localStorage. Returns
+  // {failures, crateCount, wantCount} — callers handle confirmation dialogs,
+  // failure messaging, and reloading themselves.
+  function applyBackupPayload(payload){
+    const crateCount = payload.collection?.items?.length || 0;
+    const wantCount = payload.wantlist?.items?.length || 0;
+    const failures = [];
+    if(payload.collection && !saveJSON(collectionKey(payload.username), payload.collection)) failures.push('crate');
+    if(payload.wantlist && !saveJSON(wantlistKey(payload.username), payload.wantlist)) failures.push('wantlist');
+    if(!saveJSON('cratespace:prices', payload.prices || {})) failures.push('value data');
+    if(!saveJSON('cratespace:market', payload.market || {})) failures.push('deal-check data');
+    if(!saveJSON('cratespace:artists', payload.artists || {})) failures.push('artist bios');
+    if(!saveJSON('cratespace:labels', payload.labels || {})) failures.push('label bios');
+    if(!saveJSON('cratespace:enrich', payload.enrich || {})) failures.push('enrichment data (playtime/credits/country)');
+    if(payload.assumedCondition) saveJSON('cratespace:assumedCondition', payload.assumedCondition);
+    localStorage.setItem('cratespace:lastUser', payload.username);
+    return { failures, crateCount, wantCount };
+  }
+
+  function reportImportOutcome(username, failures, crateCount, wantCount){
+    if(failures.length){
+      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Whatever did fit is saved; the rest was skipped rather than silently lost. If "crate" is in that list, your crate will still look empty after this reloads — try clearing space (Clear cache on a different site, or use a non-private browser window) and importing again.`);
+    }else if(crateCount === 0 && wantCount === 0){
+      alert(`Heads up: this backup itself contains 0 crate records and 0 wantlist items for "${username}" — there's nothing to restore from it. This usually means it was exported/pushed before a sync had completed in that browser.`);
+    }
+  }
+
   importFile.addEventListener('change', ()=>{
     const file = importFile.files[0];
     importFile.value = '';
@@ -2242,7 +2283,7 @@
       let payload;
       try{ payload = JSON.parse(reader.result); }
       catch(e){ alert("That file doesn't look like a valid CrateSpace backup (couldn't parse it as JSON)."); return; }
-      if(!payload || (payload.crateSpaceBackup !== 1 && payload.deadwaxBackup !== 1) || !payload.username){
+      if(!isValidBackupPayload(payload)){
         alert("That file doesn't look like a valid CrateSpace backup.");
         return;
       }
@@ -2261,32 +2302,187 @@
       // paints first — JSON.stringify + localStorage writes for a backup
       // this size can take a noticeable moment and would otherwise look frozen.
       setTimeout(()=>{
-        const failures = [];
-
-        // Crate and wantlist matter most — write those first, before the
-        // heavier caches have a chance to eat into the storage quota.
-        if(payload.collection && !saveJSON(collectionKey(payload.username), payload.collection)) failures.push('crate');
-        if(payload.wantlist && !saveJSON(wantlistKey(payload.username), payload.wantlist)) failures.push('wantlist');
-        if(!saveJSON('cratespace:prices', payload.prices || {})) failures.push('value data');
-        if(!saveJSON('cratespace:market', payload.market || {})) failures.push('deal-check data');
-        if(!saveJSON('cratespace:artists', payload.artists || {})) failures.push('artist bios');
-        if(!saveJSON('cratespace:labels', payload.labels || {})) failures.push('label bios');
-        if(!saveJSON('cratespace:enrich', payload.enrich || {})) failures.push('enrichment data (playtime/credits/country)');
-        if(payload.assumedCondition) saveJSON('cratespace:assumedCondition', payload.assumedCondition);
-        localStorage.setItem('cratespace:lastUser', payload.username);
-
-        if(failures.length){
-          alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Whatever did fit is saved; the rest was skipped rather than silently lost. If "crate" is in that list, your crate will still look empty after this reloads — try clearing space (Clear cache on a different site, or use a non-private browser window) and importing again.`);
-        }else if(crateCount === 0 && wantCount === 0){
-          alert(`Heads up: this backup file itself contains 0 crate records and 0 wantlist items for "${payload.username}" — there's nothing to restore from it. This usually means it was exported before a sync had completed in that browser.`);
-        }
-
+        const { failures } = applyBackupPayload(payload);
+        reportImportOutcome(payload.username, failures, crateCount, wantCount);
         location.reload();
       }, 10);
     };
     reader.onerror = ()=> alert("Couldn't read that file.");
     reader.readAsText(file);
   });
+
+  // ---------- GitHub sync (private repo as a personal backend) ----------
+  function githubToken(){ return ghToken.value.trim(); }
+
+  function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
+  function base64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
+
+  function parseRepoInput(){
+    const raw = ghRepo.value.trim();
+    const parts = raw.split('/').filter(Boolean);
+    if(parts.length !== 2) return null;
+    return { owner: parts[0], repo: parts[1] };
+  }
+
+  async function githubApiFetch(url, options){
+    options = options || {};
+    const headers = Object.assign({
+      'Authorization': `Bearer ${githubToken()}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }, options.headers || {});
+    let resp;
+    try{
+      resp = await fetch(url, Object.assign({}, options, { headers }));
+    }catch(err){
+      throw new Error("Couldn't reach GitHub's API — check your connection and try again.");
+    }
+    if(!resp.ok){
+      let msg = `GitHub API error (${resp.status}).`;
+      try{ const j = await resp.json(); if(j.message) msg = j.message; }catch(e){}
+      if(resp.status === 401) msg = 'GitHub rejected the token — check it\'s valid and not expired.';
+      if(resp.status === 403) msg = 'GitHub denied that request — check the token has "Contents: Read and write" permission on this repo.';
+      if(resp.status === 404) msg = `Repo, branch, or path not found — check "${ghRepo.value.trim()}" is correct and the token can see it.`;
+      throw new Error(msg);
+    }
+    return resp.status === 204 ? null : resp.json();
+  }
+
+  async function githubPush(onProgress){
+    const parsed = parseRepoInput();
+    if(!parsed) throw new Error('Enter the repo as "github-username/repo-name".');
+    const { owner, repo } = parsed;
+    const path = ghPath.value.trim() || 'cratespace-backup.json';
+    const api = `https://api.github.com/repos/${owner}/${repo}`;
+
+    const payload = buildBackupPayload();
+    const jsonStr = JSON.stringify(payload);
+    const contentB64 = utf8ToBase64(jsonStr);
+
+    onProgress && onProgress('Checking repo…');
+    const repoInfo = await githubApiFetch(api);
+    const branch = repoInfo.default_branch || 'main';
+
+    onProgress && onProgress('Reading current branch…');
+    let refData = null;
+    try{
+      refData = await githubApiFetch(`${api}/git/ref/heads/${encodeURIComponent(branch)}`);
+    }catch(err){
+      if(!/not found/i.test(err.message)) throw err;
+      // Branch doesn't exist yet — brand-new empty repo, handled below.
+    }
+
+    onProgress && onProgress('Uploading backup blob…');
+    const blob = await githubApiFetch(`${api}/git/blobs`, {
+      method:'POST',
+      body: JSON.stringify({ content: contentB64, encoding:'base64' })
+    });
+
+    let newCommitSha;
+    if(refData){
+      const commit = await githubApiFetch(`${api}/git/commits/${refData.object.sha}`);
+      onProgress && onProgress('Building new commit…');
+      const tree = await githubApiFetch(`${api}/git/trees`, {
+        method:'POST',
+        body: JSON.stringify({ base_tree: commit.tree.sha, tree:[{ path, mode:'100644', type:'blob', sha: blob.sha }] })
+      });
+      const newCommit = await githubApiFetch(`${api}/git/commits`, {
+        method:'POST',
+        body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, tree: tree.sha, parents:[refData.object.sha] })
+      });
+      newCommitSha = newCommit.sha;
+      onProgress && onProgress('Updating branch…');
+      await githubApiFetch(`${api}/git/refs/heads/${encodeURIComponent(branch)}`, {
+        method:'PATCH',
+        body: JSON.stringify({ sha: newCommitSha })
+      });
+    }else{
+      onProgress && onProgress('Creating first commit (empty repo)…');
+      const tree = await githubApiFetch(`${api}/git/trees`, {
+        method:'POST',
+        body: JSON.stringify({ tree:[{ path, mode:'100644', type:'blob', sha: blob.sha }] })
+      });
+      const newCommit = await githubApiFetch(`${api}/git/commits`, {
+        method:'POST',
+        body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, tree: tree.sha })
+      });
+      newCommitSha = newCommit.sha;
+      onProgress && onProgress('Creating branch…');
+      await githubApiFetch(`${api}/git/refs`, {
+        method:'POST',
+        body: JSON.stringify({ ref:`refs/heads/${branch}`, sha: newCommitSha })
+      });
+    }
+    return { crateCount: payload.collection?.items?.length||0, wantCount: payload.wantlist?.items?.length||0 };
+  }
+
+  async function githubPull(onProgress){
+    const parsed = parseRepoInput();
+    if(!parsed) throw new Error('Enter the repo as "github-username/repo-name".');
+    const { owner, repo } = parsed;
+    const path = ghPath.value.trim() || 'cratespace-backup.json';
+    const api = `https://api.github.com/repos/${owner}/${repo}`;
+
+    onProgress && onProgress('Fetching backup…');
+    let jsonStr;
+    try{
+      // Simple path first — works for files under the Contents API's ~1MB ceiling.
+      const data = await githubApiFetch(`${api}/contents/${path.split('/').map(encodeURIComponent).join('/')}`);
+      jsonStr = base64ToUtf8(data.content);
+    }catch(err){
+      if(!/too large/i.test(err.message)) throw err;
+      // Large file — fall back to the Git Data API, which has no such limit.
+      onProgress && onProgress('Large file — using the Git Data API…');
+      const repoInfo = await githubApiFetch(api);
+      const branch = repoInfo.default_branch || 'main';
+      const refData = await githubApiFetch(`${api}/git/ref/heads/${encodeURIComponent(branch)}`);
+      const commit = await githubApiFetch(`${api}/git/commits/${refData.object.sha}`);
+      const tree = await githubApiFetch(`${api}/git/trees/${commit.tree.sha}?recursive=1`);
+      const entry = tree.tree.find(t=>t.path===path);
+      if(!entry) throw new Error(`Couldn't find "${path}" in the repo.`);
+      const blobData = await githubApiFetch(`${api}/git/blobs/${entry.sha}`);
+      jsonStr = base64ToUtf8(blobData.content);
+    }
+    let payload;
+    try{ payload = JSON.parse(jsonStr); }
+    catch(e){ throw new Error("The file in that repo doesn't look like valid JSON."); }
+    if(!isValidBackupPayload(payload)) throw new Error("That file doesn't look like a valid CrateSpace backup.");
+    return payload;
+  }
+
+  ghPushBtn.addEventListener('click', async ()=>{
+    ghPushBtn.disabled = true; ghPullBtn.disabled = true;
+    try{
+      const { crateCount, wantCount } = await githubPush(msg => ghNote.innerHTML = msg);
+      ghNote.innerHTML = `Pushed just now — ${crateCount} crate records, ${wantCount} wantlist items.`;
+    }catch(err){
+      ghNote.innerHTML = `<span style="color:var(--rust)">${escapeHtml(err.message)}</span>`;
+    }finally{
+      ghPushBtn.disabled = false; ghPullBtn.disabled = false;
+    }
+  });
+
+  ghPullBtn.addEventListener('click', async ()=>{
+    ghPushBtn.disabled = true; ghPullBtn.disabled = true;
+    try{
+      const payload = await githubPull(msg => ghNote.innerHTML = msg);
+      const crateCount = payload.collection?.items?.length || 0;
+      const wantCount = payload.wantlist?.items?.length || 0;
+      const existingHasData = collection.length || wantlist.length;
+      const msg = existingHasData
+        ? `This backup for "${payload.username}" contains ${crateCount} crate records and ${wantCount} wantlist items. It will replace what's cached in this browser now, plus pricing/deal/bio data. Continue?`
+        : `Pull the backup for "${payload.username}" — ${crateCount} crate records and ${wantCount} wantlist items?`;
+      if(!confirm(msg)){ ghNote.innerHTML = ghNoteDefault; ghPushBtn.disabled=false; ghPullBtn.disabled=false; return; }
+      const { failures } = applyBackupPayload(payload);
+      reportImportOutcome(payload.username, failures, crateCount, wantCount);
+      location.reload();
+    }catch(err){
+      ghNote.innerHTML = `<span style="color:var(--rust)">${escapeHtml(err.message)}</span>`;
+      ghPushBtn.disabled = false; ghPullBtn.disabled = false;
+    }
+  });
+
 
   let searchDebounce;
   searchInput.addEventListener('input', ()=>{
