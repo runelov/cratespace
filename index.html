@@ -2455,7 +2455,15 @@
     return payload;
   }
 
+  function rememberGhFields(){
+    localStorage.setItem('cratespace:ghRepo', ghRepo.value.trim());
+    localStorage.setItem('cratespace:ghPath', ghPath.value.trim());
+  }
+  ghRepo.addEventListener('change', rememberGhFields);
+  ghPath.addEventListener('change', rememberGhFields);
+
   ghPushBtn.addEventListener('click', async ()=>{
+    rememberGhFields();
     ghPushBtn.disabled = true; ghPullBtn.disabled = true;
     try{
       const { crateCount, wantCount } = await githubPush(msg => ghNote.innerHTML = msg);
@@ -2468,6 +2476,7 @@
   });
 
   ghPullBtn.addEventListener('click', async ()=>{
+    rememberGhFields();
     ghPushBtn.disabled = true; ghPullBtn.disabled = true;
     try{
       const payload = await githubPull(msg => ghNote.innerHTML = msg);
@@ -2509,6 +2518,10 @@
   // ---------- boot ----------
   (function init(){
     loadAllCaches();
+    const lastGhRepo = localStorage.getItem('cratespace:ghRepo');
+    const lastGhPath = localStorage.getItem('cratespace:ghPath');
+    if(lastGhRepo) ghRepo.value = lastGhRepo;
+    if(lastGhPath) ghPath.value = lastGhPath;
     const lastUser = localStorage.getItem('cratespace:lastUser');
     if(lastUser){
       usernameInput.value = lastUser;
