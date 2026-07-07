@@ -2390,14 +2390,28 @@
 
     onProgress && onProgress('Fetching backup…');
     let jsonStr, reportedSize, pathUsed;
+    let needsGitDataApi = false;
     try{
       // Simple path first — works for files under the Contents API's size ceiling.
       const data = await githubApiFetch(`${api}/contents/${path.split('/').map(encodeURIComponent).join('/')}`);
-      jsonStr = base64ToUtf8(data.content);
-      reportedSize = data.size;
-      pathUsed = 'contents API';
+      // For files past some size threshold, GitHub doesn't always error —
+      // it can return 200 OK with an empty/missing content field instead
+      // (encoding "none", or just no content at all) and expect you to
+      // follow git_url. Check for that explicitly rather than trusting
+      // any 200 response to mean we got real data.
+      if(!data.content || data.encoding !== 'base64'){
+        needsGitDataApi = true;
+      }else{
+        jsonStr = base64ToUtf8(data.content);
+        reportedSize = data.size;
+        pathUsed = 'contents API';
+      }
     }catch(err){
       if(!/too large/i.test(err.message)) throw err;
+      needsGitDataApi = true;
+    }
+
+    if(needsGitDataApi){
       // Large file — fall back to the Git Data API, which has no such limit.
       onProgress && onProgress('Large file — using the Git Data API…');
       const repoInfo = await githubApiFetch(api);
