@@ -429,11 +429,6 @@
         <button class="btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
       </div>
       <div class="sync-panel" style="margin-top:8px;">
-        <button class="btn ghost small" id="exportBtn" title="Download everything cached in this browser as a file">⇩ Export data</button>
-        <button class="btn ghost small" id="importBtn" title="Load a previously exported file">⇧ Import data</button>
-        <input type="file" id="importFile" accept="application/json" style="display:none;">
-      </div>
-      <div class="sync-panel" style="margin-top:8px;">
         <input id="ghRepo" type="text" placeholder="github-username/repo" autocomplete="off" style="min-width:190px;">
         <input id="ghPath" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" style="min-width:150px;">
         <input id="ghToken" type="password" placeholder="github token" autocomplete="off">
@@ -441,7 +436,7 @@
         <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
       </div>
       <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
-      <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use Export here, then Import that file there — it's a plain file you keep yourself, nothing is uploaded anywhere.</div>
+      <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
     </div>
   </div>
 
@@ -561,9 +556,6 @@
   const syncWantBtn = el('syncWantBtn');
   const fullSyncWantBtn = el('fullSyncWantBtn');
   const clearCacheBtn = el('clearCacheBtn');
-  const exportBtn = el('exportBtn');
-  const importBtn = el('importBtn');
-  const importFile = el('importFile');
   const ghRepo = el('ghRepo');
   const ghPath = el('ghPath');
   const ghToken = el('ghToken');
@@ -2227,22 +2219,6 @@
     };
   }
 
-  exportBtn.addEventListener('click', ()=>{
-    const payload = buildBackupPayload();
-    const username = payload.username;
-    const blob = new Blob([JSON.stringify(payload)], { type:'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const datePart = new Date().toISOString().slice(0,10);
-    a.href = url;
-    a.download = `cratespace-backup-${username || 'crate'}-${datePart}.json`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  importBtn.addEventListener('click', ()=> importFile.click());
   function isValidBackupPayload(payload){
     return !!(payload && (payload.crateSpaceBackup === 1 || payload.deadwaxBackup === 1) && payload.username);
   }
@@ -2268,54 +2244,38 @@
 
   function reportImportOutcome(username, failures, crateCount, wantCount){
     if(failures.length){
-      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Whatever did fit is saved; the rest was skipped rather than silently lost. If "crate" is in that list, your crate will still look empty after this reloads — try clearing space (Clear cache on a different site, or use a non-private browser window) and importing again.`);
+      alert(`This browser's storage quota was hit partway through — couldn't save: ${failures.join(', ')}. Whatever did fit is saved; the rest was skipped rather than silently lost. If "crate" is in that list, your crate will still look empty after this reloads — try clearing space (Clear cache on a different site, or use a non-private browser window) and pulling again.`);
     }else if(crateCount === 0 && wantCount === 0){
-      alert(`Heads up: this backup itself contains 0 crate records and 0 wantlist items for "${username}" — there's nothing to restore from it. This usually means it was exported/pushed before a sync had completed in that browser.`);
+      alert(`Heads up: this backup itself contains 0 crate records and 0 wantlist items for "${username}" — there's nothing to restore from it. This usually means it was pushed before a sync had completed in that browser.`);
     }
   }
-
-  importFile.addEventListener('change', ()=>{
-    const file = importFile.files[0];
-    importFile.value = '';
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ()=>{
-      let payload;
-      try{ payload = JSON.parse(reader.result); }
-      catch(e){ alert("That file doesn't look like a valid CrateSpace backup (couldn't parse it as JSON)."); return; }
-      if(!isValidBackupPayload(payload)){
-        alert("That file doesn't look like a valid CrateSpace backup.");
-        return;
-      }
-      const crateCount = payload.collection?.items?.length || 0;
-      const wantCount = payload.wantlist?.items?.length || 0;
-      const existingHasData = collection.length || wantlist.length;
-      const msg = existingHasData
-        ? `This backup for "${payload.username}" contains ${crateCount} crate records and ${wantCount} wantlist items (synced ${payload.collection?.syncedAt ? fmtDate(payload.collection.syncedAt) : 'unknown time'}). It will replace what's cached in this browser now, plus pricing/deal/bio data. Continue?`
-        : `Import the backup for "${payload.username}" — ${crateCount} crate records and ${wantCount} wantlist items?`;
-      if(!confirm(msg)) return;
-
-      importBtn.disabled = true;
-      importBtn.textContent = 'Importing…';
-
-      // Defer the heavy work one tick so the "Importing…" label actually
-      // paints first — JSON.stringify + localStorage writes for a backup
-      // this size can take a noticeable moment and would otherwise look frozen.
-      setTimeout(()=>{
-        const { failures } = applyBackupPayload(payload);
-        reportImportOutcome(payload.username, failures, crateCount, wantCount);
-        location.reload();
-      }, 10);
-    };
-    reader.onerror = ()=> alert("Couldn't read that file.");
-    reader.readAsText(file);
-  });
 
   // ---------- GitHub sync (private repo as a personal backend) ----------
   function githubToken(){ return ghToken.value.trim(); }
 
-  function utf8ToBase64(str){ return btoa(unescape(encodeURIComponent(str))); }
-  function base64ToUtf8(b64){ return decodeURIComponent(escape(atob(b64.replace(/\n/g,'')))); }
+  // Proper byte-accurate UTF-8 <-> base64 conversion. The classic
+  // btoa(unescape(encodeURIComponent(x))) trick relies on deprecated
+  // escape/unescape functions that have real edge cases with certain
+  // Unicode sequences — rare on a small string, but with thousands of
+  // artist/label names the odds of hitting one climb fast, and the failure
+  // mode is silent corruption (no thrown error, just a string that later
+  // fails JSON.parse) rather than a clear crash. TextEncoder/TextDecoder
+  // work on actual bytes and don't have that problem.
+  function utf8ToBase64(str){
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    const chunkSize = 0x8000;
+    for(let i=0; i<bytes.length; i+=chunkSize){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i+chunkSize));
+    }
+    return btoa(binary);
+  }
+  function base64ToUtf8(b64){
+    const binary = atob(b64.replace(/\s/g,''));
+    const bytes = new Uint8Array(binary.length);
+    for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
 
   function parseRepoInput(){
     const raw = ghRepo.value.trim();
@@ -2429,11 +2389,13 @@
     const api = `https://api.github.com/repos/${owner}/${repo}`;
 
     onProgress && onProgress('Fetching backup…');
-    let jsonStr;
+    let jsonStr, reportedSize, pathUsed;
     try{
-      // Simple path first — works for files under the Contents API's ~1MB ceiling.
+      // Simple path first — works for files under the Contents API's size ceiling.
       const data = await githubApiFetch(`${api}/contents/${path.split('/').map(encodeURIComponent).join('/')}`);
       jsonStr = base64ToUtf8(data.content);
+      reportedSize = data.size;
+      pathUsed = 'contents API';
     }catch(err){
       if(!/too large/i.test(err.message)) throw err;
       // Large file — fall back to the Git Data API, which has no such limit.
@@ -2447,10 +2409,27 @@
       if(!entry) throw new Error(`Couldn't find "${path}" in the repo.`);
       const blobData = await githubApiFetch(`${api}/git/blobs/${entry.sha}`);
       jsonStr = base64ToUtf8(blobData.content);
+      reportedSize = blobData.size;
+      pathUsed = 'Git Data API';
     }
+
+    // Sanity-check what we actually got against what GitHub says the file is.
+    const actualBytes = new TextEncoder().encode(jsonStr).length;
+    const sizeNote = (typeof reportedSize === 'number')
+      ? ` GitHub reports the file as ${reportedSize} bytes; decoded to ${actualBytes} bytes via ${pathUsed}${reportedSize !== actualBytes ? ' — MISMATCH, likely truncated or corrupted in transit' : ' (matches)'}.`
+      : '';
+
     let payload;
     try{ payload = JSON.parse(jsonStr); }
-    catch(e){ throw new Error("The file in that repo doesn't look like valid JSON."); }
+    catch(e){
+      const posMatch = e.message.match(/position (\d+)/i);
+      let context = '';
+      if(posMatch){
+        const pos = Number(posMatch[1]);
+        context = ` Near byte ${pos}: …${jsonStr.slice(Math.max(0,pos-40), pos)}⚠${jsonStr.slice(pos, pos+40)}…`;
+      }
+      throw new Error(`The file in that repo doesn't look like valid JSON (${e.message}).${sizeNote}${context}`);
+    }
     if(!isValidBackupPayload(payload)) throw new Error("That file doesn't look like a valid CrateSpace backup.");
     return payload;
   }
