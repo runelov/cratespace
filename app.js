@@ -560,8 +560,18 @@
       switch(sortMode){
         case 'artist-asc': return a.artistDisplay.localeCompare(b.artistDisplay);
         case 'title-asc': return a.title.localeCompare(b.title);
-        case 'year-desc': return (b.year||0) - (a.year||0);
-        case 'year-asc': return (a.year||0) - (b.year||0);
+        case 'year-desc': {
+          if(!a.year && !b.year) return 0;
+          if(!a.year) return 1;
+          if(!b.year) return -1;
+          return b.year - a.year;
+        }
+        case 'year-asc': {
+          if(!a.year && !b.year) return 0;
+          if(!a.year) return 1;
+          if(!b.year) return -1;
+          return a.year - b.year;
+        }
         case 'added-desc': return new Date(b.date_added||0) - new Date(a.date_added||0);
         case 'value-desc': {
           const av=getItemValue(a)?.amount ?? null, bv=getItemValue(b)?.amount ?? null;
