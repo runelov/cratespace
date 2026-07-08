@@ -1468,15 +1468,17 @@
       if(r.year){ const d = Math.floor(r.year/10)*10; valueByDecade[d] = (valueByDecade[d]||0)+amount; }
     });
 
-    let enrichedCount=0, totalDurationSec=0, haveSum=0, haveCount=0;
+    let enrichedCount=0, totalDurationSec=0;
+    const haveValues = [];
     const countryMap = {};
     const creditMap = new Map();
+    const rarityCandidates = [];
     collection.forEach(r=>{
       const e = enrichCache[r.id];
       if(!e) return;
       enrichedCount++;
       totalDurationSec += e.totalDurationSec||0;
-      if(typeof e.communityHave === 'number'){ haveSum += e.communityHave; haveCount++; }
+      if(typeof e.communityHave === 'number') haveValues.push(e.communityHave);
       if(e.country) countryMap[e.country] = (countryMap[e.country]||0)+1;
       const seen = new Set();
       (e.credits||[]).forEach(c=>{
@@ -1487,9 +1489,20 @@
         entry.count++;
         if(c.role) entry.roles.add(c.role);
       });
+      if(typeof e.communityHave === 'number' && typeof e.communityWant === 'number' && e.communityWant > 0){
+        // +1 on "have" avoids divide-by-zero for the (rare) case of zero other
+        // known owners, while still ranking those cases highest, as they should be.
+        rarityCandidates.push({ r, have:e.communityHave, want:e.communityWant, ratio: e.communityWant / (e.communityHave + 1) });
+      }
     });
     const topCredits = [...creditMap.values()].sort((a,b)=>b.count-a.count).slice(0,10);
-    const avgHave = haveCount ? haveSum/haveCount : null;
+    let medianHave = null;
+    if(haveValues.length){
+      const sorted = haveValues.slice().sort((a,b)=>a-b);
+      const mid = Math.floor(sorted.length/2);
+      medianHave = sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
+    }
+    const topRarityGems = rarityCandidates.sort((a,b)=> b.ratio - a.ratio).slice(0,10);
 
     return {
       total: collection.length,
@@ -1502,7 +1515,7 @@
       genreMapAll: genreMap, styleMapAll: styleMap, decadeMapAll: decadeMap,
       topStylesList: Object.entries(styleMap).sort((a,b)=>b[1]-a[1]).slice(0,10),
       priced, valueSum, currency, topValuable, valueByGenre, valueByDecade,
-      enrichedCount, totalDurationSec, avgHave, countryMap, topCredits,
+      enrichedCount, totalDurationSec, medianHave, countryMap, topCredits, topRarityGems,
       artistMapAll: artistMap, labelMapAll: labelMap, yearCounts
     };
   }
@@ -1583,8 +1596,8 @@
         const hours = s.totalDurationSec/3600;
         p += `Stack it all up and — for the ${s.enrichedCount} of ${s.total} records checked so far — you're sitting on roughly <b>${hours<48?hours.toFixed(1)+' hours':(hours/24).toFixed(1)+' days'}</b> of continuous listening. `;
       }
-      if(s.avgHave!=null){
-        p += `The average record here is owned by about <b>${Math.round(s.avgHave)}</b> other Discogs users — ${s.avgHave<200?"you're collecting deeper into the crates than most.":'a fairly well-trodden path, taste-wise.'}`;
+      if(s.medianHave!=null){
+        p += `Among the ${s.enrichedCount} records checked so far, the median one is logged in about <b>${Math.round(s.medianHave)}</b> other Discogs users' collections (median, not average, so one or two huge outliers can't skew it) — take that as a rough, partial-sample signal rather than a verdict on your whole crate.`;
       }
       if(p) paras.push(p);
       if(s.topCredits.length){
@@ -1644,7 +1657,7 @@
       const hours = s.totalDurationSec/3600;
       statCards.push({ lab:'Total playtime', val: hours<48?`${hours.toFixed(1)}h`:`${(hours/24).toFixed(1)}d`, sub:`${s.enrichedCount} of ${s.total} checked` });
     }
-    if(s.avgHave!=null) statCards.push({ lab:'Avg. community "have"', val:Math.round(s.avgHave), sub:'lower = more obscure' });
+    if(s.medianHave!=null) statCards.push({ lab:'Median community "have"', val:Math.round(s.medianHave), sub:`of ${s.enrichedCount} checked` });
 
     const statCardsHtml = statCards.map(c=>{
       const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="stat-card"';
@@ -1707,6 +1720,14 @@
             <table class="leaderboard">
               <thead><tr><th>Name</th><th>Role(s)</th><th style="text-align:right;">Records</th></tr></thead>
               <tbody>${s.topCredits.map(c=>`<tr><td class="insight-clickable" data-ik="credit" data-iv="${c.id}" data-ilabel="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td><td>${escapeHtml([...c.roles].slice(0,3).join(', '))}</td><td class="num">${c.count}</td></tr>`).join('')}</tbody>
+            </table>
+          </div>` : ''}
+          ${s.topRarityGems.length ? `<div class="chart-box wide">
+            <h4>Hardest to find, most wanted</h4>
+            <p class="value-note" style="margin:-4px 0 12px;">Ranked by want ÷ (have + 1) among the ${s.enrichedCount} records checked so far — high want count, low number of other owners on Discogs.</p>
+            <table class="leaderboard">
+              <thead><tr><th>Record</th><th style="text-align:right;">Have</th><th style="text-align:right;">Want</th><th style="text-align:right;">Ratio</th></tr></thead>
+              <tbody>${s.topRarityGems.map(g=>`<tr><td>${ic(escapeHtml(g.r.title),'title',g.r.title)} <span style="color:var(--line);">— ${ic(escapeHtml(g.r.artistDisplay),'artist',g.r.artistDisplay)}</span></td><td class="num">${g.have}</td><td class="num">${g.want}</td><td class="num">${g.ratio.toFixed(1)}</td></tr>`).join('')}</tbody>
             </table>
           </div>` : ''}
         </div>
