@@ -229,6 +229,13 @@
     const { amount, currency } = convertCurrency(value, src, displayCurrency);
     return fmtMoney(amount, currency);
   }
+  // Applied at display time (not just at fetch time) so it fixes names in
+  // already-cached records too, without requiring a Full Resync.
+  function stripSuffix(name){ return (name||'').replace(/\s\(\d+\)$/,''); }
+  function cleanArtistDisplay(r){
+    return (r.artists && r.artists.length ? r.artists.map(a=>stripSuffix(a.name)).join(', ') : null) || r.artistDisplay || 'Unknown artist';
+  }
+
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
@@ -537,7 +544,7 @@
   }
 
   function groupKeyFor(r, mode){
-    if(mode === 'artist') return r.artistDisplay || 'Unknown artist';
+    if(mode === 'artist') return cleanArtistDisplay(r);
     if(mode === 'year') return r.year ? String(r.year) : 'Unknown year';
     if(mode === 'label') return (r.labels[0] && r.labels[0].name) || 'Unknown label';
     return null;
@@ -681,9 +688,9 @@
     const priceBadge = iv
       ? `<div class="price-badge" title="${iv.exact ? `Priced at your copy's condition (${escapeHtml(r.condition)})` : 'Estimated using the assumed condition — actual condition not on record'}">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</div>` : '';
     const wantRibbon = isWant ? `<div class="want-ribbon">Want</div>` : '';
-    const artistLinks = r.artists.map(a=>`<span class="ds-link artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
+    const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(stripSuffix(a.name))}">${escapeHtml(stripSuffix(a.name))}</span>`).join(', ');
     const firstLabel = r.labels[0];
-    const labelLink = firstLabel ? `<span class="ds-link label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(firstLabel.name)}">${escapeHtml(firstLabel.name)}</span>` : '—';
+    const labelLink = firstLabel ? `<span class="label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(stripSuffix(firstLabel.name))}">${escapeHtml(stripSuffix(firstLabel.name))}</span>` : '—';
 
     if(viewMode === 'list'){
       const listPrice = iv ? `<span class="list-price">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</span>` : '';
@@ -810,8 +817,8 @@
     if(!r){ r = wantlist.find(x=>x.id===id); if(r) sourceList = 'wantlist'; }
     if(!r) return;
     const art = r.cover ? `<img src="${r.cover}" alt="">` : `<div class="no-art">${escapeHtml(r.title)}</div>`;
-    const artistLinks = r.artists.map(a=>`<span class="ds-link artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
-    const labelLinks = r.labels.map(l=>`<span class="ds-link label-link" data-type="label" data-id="${l.id}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)}</span>`).join(', ') || '—';
+    const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(stripSuffix(a.name))}">${escapeHtml(stripSuffix(a.name))}</span>`).join(', ');
+    const labelLinks = r.labels.map(l=>`<span class="label-link" data-type="label" data-id="${l.id}" data-name="${escapeHtml(stripSuffix(l.name))}">${escapeHtml(stripSuffix(l.name))}</span>`).join(', ') || '—';
     modalRoot.innerHTML = `
       <div class="modal-backdrop" id="backdrop">
         <div class="modal">
@@ -828,8 +835,8 @@
               <div class="stamp">${escapeHtml(r.formats.join(' / ')||'—')}</div>
               <div class="stamp">${escapeHtml(r.catno||'no cat#')}</div>
               <div style="margin-top:8px;">
-                ${r.genres.map(g=>`<span class="ds-tag tag">${escapeHtml(g)}</span>`).join('')}
-                ${r.styles.map(s=>`<span class="ds-tag tag" style="background:var(--rust)">${escapeHtml(s)}</span>`).join('')}
+                ${r.genres.map(g=>`<span class="tag">${escapeHtml(g)}</span>`).join('')}
+                ${r.styles.map(s=>`<span class="tag" style="background:var(--rust)">${escapeHtml(s)}</span>`).join('')}
               </div>
               <div style="margin-top:10px;font-size:12.5px;color:var(--line);">${labelLinks}</div>
               <div class="value-block">
@@ -855,7 +862,7 @@
     if(removeBtn) removeBtn.addEventListener('click', async ()=>{
       const label = sourceList === 'crate' ? 'crate' : 'wantlist';
       const ok = await showConfirm(
-        `Remove <b>${escapeHtml(r.title)}</b> by ${escapeHtml(r.artistDisplay)} from your ${label}? This only changes what's cached in this browser — it won't touch Discogs, and a future sync won't bring it back unless it's still on Discogs.`,
+        `Remove <b>${escapeHtml(r.title)}</b> by ${escapeHtml(cleanArtistDisplay(r))} from your ${label}? This only changes what's cached in this browser — it won't touch Discogs, and a future sync won't bring it back unless it's still on Discogs.`,
         { title:`Remove from ${label}?`, confirmLabel:'Remove', cancelLabel:'Keep it' }
       );
       if(!ok) return;
@@ -941,7 +948,7 @@
       body.innerHTML = `<div class="value-note">Add a personal access token above to look up value estimates.</div>`;
       return;
     }
-    body.innerHTML = `<button class="ds-button btn small" id="lookupValueBtn">Look up value</button>`;
+    body.innerHTML = `<button class="btn small" id="lookupValueBtn">Look up value</button>`;
     const btn = el('lookupValueBtn');
     if(btn) btn.addEventListener('click', async ()=>{
       btn.disabled = true;
@@ -973,8 +980,8 @@
           <div class="confirm-title">${escapeHtml(title)}</div>
           <div class="confirm-message">${message}</div>
           <div class="confirm-actions">
-            <button class="ds-button btn ghost small" id="confirmCancelBtn">${escapeHtml(cancelLabel)}</button>
-            <button class="ds-button btn small" id="confirmOkBtn">${escapeHtml(confirmLabel)}</button>
+            <button class="btn ghost small" id="confirmCancelBtn">${escapeHtml(cancelLabel)}</button>
+            <button class="btn small" id="confirmOkBtn">${escapeHtml(confirmLabel)}</button>
           </div>
         </div>`;
       document.body.appendChild(root);
@@ -1211,7 +1218,7 @@
       if(!hasTargetFormat(r, gapFormats)) return;
       r.artists.forEach(a=>{
         if(!a.id || isVariousArtist(a)) return;
-        if(!ownedByArtist.has(a.id)) ownedByArtist.set(a.id, { name:a.name, releases:[] });
+        if(!ownedByArtist.has(a.id)) ownedByArtist.set(a.id, { name:stripSuffix(a.name), releases:[] });
         ownedByArtist.get(a.id).releases.push(r);
       });
     });
@@ -1220,7 +1227,7 @@
       if(!hasTargetFormat(r, gapFormats)) return;
       r.artists.forEach(a=>{
         if(!a.id || isVariousArtist(a)) return;
-        if(!wantByArtist.has(a.id)) wantByArtist.set(a.id, { name:a.name, releases:[] });
+        if(!wantByArtist.has(a.id)) wantByArtist.set(a.id, { name:stripSuffix(a.name), releases:[] });
         wantByArtist.get(a.id).releases.push(r);
       });
     });
@@ -1274,8 +1281,8 @@
         <div class="ctrl">
           <label>Deals (opt-in — one Discogs request per record)</label>
           <div>
-            <button class="ds-button btn small" id="dealPassBtn">Check for deals</button>
-            <button class="ds-button btn ghost small" id="dealRefreshBtn">Refresh all</button>
+            <button class="btn small" id="dealPassBtn">Check for deals</button>
+            <button class="btn ghost small" id="dealRefreshBtn">Refresh all</button>
           </div>
         </div>
         <div class="gaps-note" id="gapsProgress">
@@ -1283,6 +1290,16 @@
           ${missingFormats ? ' Your cached crate predates format tracking — run a <b>Full resync</b> of your crate for accurate results here.' : ''}
         </div>
       </div>`;
+
+    function groupWantedByMaster(releases){
+      const map = new Map();
+      releases.forEach(r=>{
+        const key = r.masterId ? `m:${r.masterId}` : `single:${r.id}`;
+        if(!map.has(key)) map.set(key, []);
+        map.get(key).push(r);
+      });
+      return [...map.values()].map(versions=>({ rep: versions.find(r=>r.cover) || versions[0], versions }));
+    }
 
     const groupsHtml = groups.length
       ? groups.map(g => `
@@ -1293,7 +1310,7 @@
               <span class="gap-want-count">${g.wanted.length} wanted${valueSuffix(g.wanted)}</span>
             </div>
             <div class="${gridClass()}">
-              ${g.wanted.map(r => `<div class="gap-item">${sleeveCard(r, true)}${gapDealHtml(r)}</div>`).join('')}
+              ${groupWantedByMaster(g.wanted).map(({rep, versions}) => `<div class="gap-item">${sleeveCard(rep, true)}${versions.length>1?`<div class="gap-version-note">${versions.length} versions wantlisted</div>`:''}${gapDealHtml(rep)}</div>`).join('')}
             </div>
           </div>`).join('')
       : `<div class="state" style="padding:60px 20px;"><h2>No gaps found yet</h2><p>Either you already own everything you want from your regular artists, your wantlist doesn't overlap with them yet, or your crate needs a sync/resync so format data is available.</p></div>`;
@@ -1397,12 +1414,12 @@
     collection.forEach(r=>{
       r.artists.forEach(a=>{
         if(!a.id || isVariousArtist(a)) return;
-        if(!artistMap.has(a.id)) artistMap.set(a.id, { name:a.name, count:0 });
+        if(!artistMap.has(a.id)) artistMap.set(a.id, { name:stripSuffix(a.name), count:0 });
         artistMap.get(a.id).count++;
       });
       r.labels.forEach(l=>{
         if(!l.id) return;
-        if(!labelMap.has(l.id)) labelMap.set(l.id, { name:l.name, count:0 });
+        if(!labelMap.has(l.id)) labelMap.set(l.id, { name:stripSuffix(l.name), count:0 });
         labelMap.get(l.id).count++;
       });
       r.genres.forEach(g=> genreMap[g] = (genreMap[g]||0)+1);
@@ -1470,6 +1487,7 @@
 
     let enrichedCount=0, totalDurationSec=0;
     const haveValues = [];
+    const wantValues = [];
     const countryMap = {};
     const creditMap = new Map();
     const rarityCandidates = [];
@@ -1479,12 +1497,13 @@
       enrichedCount++;
       totalDurationSec += e.totalDurationSec||0;
       if(typeof e.communityHave === 'number') haveValues.push(e.communityHave);
+      if(typeof e.communityWant === 'number') wantValues.push(e.communityWant);
       if(e.country) countryMap[e.country] = (countryMap[e.country]||0)+1;
       const seen = new Set();
       (e.credits||[]).forEach(c=>{
         if(c.id == null || seen.has(c.id)) return;
         seen.add(c.id);
-        if(!creditMap.has(c.id)) creditMap.set(c.id, { name:c.name, count:0, roles:new Set() });
+        if(!creditMap.has(c.id)) creditMap.set(c.id, { id:c.id, name:c.name, count:0, roles:new Set() });
         const entry = creditMap.get(c.id);
         entry.count++;
         if(c.role) entry.roles.add(c.role);
@@ -1502,6 +1521,12 @@
       const mid = Math.floor(sorted.length/2);
       medianHave = sorted.length % 2 ? sorted[mid] : (sorted[mid-1]+sorted[mid])/2;
     }
+    let medianWant = null;
+    if(wantValues.length){
+      const sortedW = wantValues.slice().sort((a,b)=>a-b);
+      const midW = Math.floor(sortedW.length/2);
+      medianWant = sortedW.length % 2 ? sortedW[midW] : (sortedW[midW-1]+sortedW[midW])/2;
+    }
     const topRarityGems = rarityCandidates.sort((a,b)=> b.ratio - a.ratio).slice(0,10);
 
     return {
@@ -1515,7 +1540,7 @@
       genreMapAll: genreMap, styleMapAll: styleMap, decadeMapAll: decadeMap,
       topStylesList: Object.entries(styleMap).sort((a,b)=>b[1]-a[1]).slice(0,10),
       priced, valueSum, currency, topValuable, valueByGenre, valueByDecade,
-      enrichedCount, totalDurationSec, medianHave, countryMap, topCredits, topRarityGems,
+      enrichedCount, totalDurationSec, medianHave, medianWant, countryMap, topCredits, topRarityGems,
       artistMapAll: artistMap, labelMapAll: labelMap, yearCounts
     };
   }
@@ -1574,7 +1599,7 @@
     }
     if(s.oldest && s.newest){
       const oldDecade = Math.floor(s.oldest.year/10)*10, newDecade = Math.floor(s.newest.year/10)*10;
-      paras.push(`Your oldest pressing dates to ${ic(`<b>${s.oldest.year}</b>`,'decade',oldDecade)} (${ic(escapeHtml(s.oldest.title),'title',s.oldest.title)} by ${ic(escapeHtml(s.oldest.artistDisplay),'artist',s.oldest.artistDisplay)}); your newest catch is from ${ic(`<b>${s.newest.year}</b>`,'decade',newDecade)}.`);
+      paras.push(`Your oldest pressing dates to ${ic(`<b>${s.oldest.year}</b>`,'decade',oldDecade)} (${ic(escapeHtml(s.oldest.title),'title',s.oldest.title)} by ${ic(escapeHtml(cleanArtistDisplay(s.oldest)),'artist',cleanArtistDisplay(s.oldest))}); your newest catch is from ${ic(`<b>${s.newest.year}</b>`,'decade',newDecade)}.`);
     }
     if(s.firstAdded){
       const fmtShort = iso => new Date(iso).toLocaleDateString('en-US',{ year:'numeric', month:'long' });
@@ -1585,7 +1610,7 @@
     if(s.priced){
       const top = s.topValuable[0];
       let p = `Priced items alone are worth an estimated <b>${fmtMoneyDisplay(s.valueSum,s.currency)}</b> (based on ${s.priced} of ${s.total} records)`;
-      if(top) p += `, led by ${ic(`<b>${escapeHtml(top.r.title)}</b>`,'title',top.r.title)} by ${ic(escapeHtml(top.r.artistDisplay),'artist',top.r.artistDisplay)} at ${fmtMoneyDisplay(top.amount, top.currency)}`;
+      if(top) p += `, led by ${ic(`<b>${escapeHtml(top.r.title)}</b>`,'title',top.r.title)} by ${ic(escapeHtml(cleanArtistDisplay(top.r)),'artist',cleanArtistDisplay(top.r))} at ${fmtMoneyDisplay(top.amount, top.currency)}`;
       paras.push(p + '.');
     }else{
       paras.push(`<span class="locked">Estimate some values from the My Crate view to unlock value-based insights here.</span>`);
@@ -1632,7 +1657,7 @@
     if(chartInstances[canvasId]){ chartInstances[canvasId].destroy(); }
     chartInstances[canvasId] = new Chart(canvas.getContext('2d'), config);
   }
-  const PALETTE = ['#0062BA','#C7292E','#8A5A00','#0055A4','#4A5A6B','#5C6B7A','#1B2B3D','#7FA8D9','#D98A8D','#C9A45C'];
+  const PALETTE = ['#d8a51d','#9a3324','#49603f','#7c715a','#c98b3a','#6b2e22','#3a4a30','#a89b7c','#e0c068','#b5493a'];
 
   function renderInsightsView(){
     const s = computeInsights();
@@ -1658,35 +1683,36 @@
       statCards.push({ lab:'Total playtime', val: hours<48?`${hours.toFixed(1)}h`:`${(hours/24).toFixed(1)}d`, sub:`${s.enrichedCount} of ${s.total} checked` });
     }
     if(s.medianHave!=null) statCards.push({ lab:'Median community "have"', val:Math.round(s.medianHave), sub:`of ${s.enrichedCount} checked` });
+    if(s.medianWant!=null) statCards.push({ lab:'Median community "want"', val:Math.round(s.medianWant), sub:`of ${s.enrichedCount} checked` });
 
     const statCardsHtml = statCards.map(c=>{
-      const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="ds-card stat-card"';
+      const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="stat-card"';
       return `<div${clickAttrs}><div class="lab">${escapeHtml(c.lab)}</div><div class="val">${escapeHtml(String(c.val))}</div>${c.sub?`<div class="sub">${escapeHtml(c.sub)}</div>`:''}</div>`;
     }).join('');
 
     const enrichHtml = `
       <div class="enrich-panel">
         <div class="txt">Unlock total playtime, pressing countries, community-obscurity, and hidden-collaborator insights by checking each record's full details (one Discogs request per record, cached afterward — opening a record's modal also does this for free, one at a time).</div>
-        <div class="progress" id="enrichProgress"></div>
-        <button class="ds-button btn small" id="enrichBtn">Enrich my collection</button>
-        <button class="ds-button btn ghost small" id="enrichRefreshBtn">Refresh all</button>
+        <div class="progress" id="enrichProgress">${enrichPassRunning ? `Checking record ${enrichDone} of ${enrichTotal}…` : ''}</div>
+        <button class="btn small${enrichPassRunning ? ' running' : ''}" id="enrichBtn">${enrichPassRunning ? `⏹ Stop (${enrichDone} of ${enrichTotal})` : 'Enrich my collection'}</button>
+        <button class="btn ghost small" id="enrichRefreshBtn">Refresh all</button>
       </div>`;
 
     const chartsHtml = `
       <div class="insight-section">
         <h3>The shape of your crate</h3>
         <div class="chart-grid">
-          <div class="ds-card chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
-          <div class="ds-card chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
-          <div class="ds-card chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
-          <div class="ds-card chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
-          <div class="ds-card chart-box wide">
+          <div class="chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
+          <div class="chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
+          <div class="chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
+          <div class="chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
+          <div class="chart-box wide">
             <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
               <span>Collecting over time</span>
               <span class="timeline-cutoff-ctrl">
                 Hide activity before
                 <input type="date" id="timelineCutoffInput" value="${timelineCutoff||''}">
-                ${timelineCutoff ? '<button class="ds-button btn ghost small" id="timelineCutoffClear">Clear</button>' : ''}
+                ${timelineCutoff ? '<button class="btn ghost small" id="timelineCutoffClear">Clear</button>' : ''}
               </span>
             </h4>
             <canvas id="chartTimeline"></canvas>
@@ -1698,13 +1724,13 @@
       <div class="insight-section">
         <h3>Where the value sits</h3>
         <div class="chart-grid">
-          <div class="ds-card chart-box"><h4>Value by genre</h4><canvas id="chartValueGenre"></canvas></div>
-          <div class="ds-card chart-box"><h4>Value by decade</h4><canvas id="chartValueDecade"></canvas></div>
-          <div class="ds-card chart-box wide">
+          <div class="chart-box"><h4>Value by genre</h4><canvas id="chartValueGenre"></canvas></div>
+          <div class="chart-box"><h4>Value by decade</h4><canvas id="chartValueDecade"></canvas></div>
+          <div class="chart-box wide">
             <h4>Most valuable records</h4>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th>Artist</th><th style="text-align:right;">Est. value</th></tr></thead>
-              <tbody>${s.topValuable.map(v=>`<tr><td>${ic(escapeHtml(v.r.title),'title',v.r.title)}</td><td>${ic(escapeHtml(v.r.artistDisplay),'artist',v.r.artistDisplay)}</td><td class="num">${fmtMoneyDisplay(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
+              <tbody>${s.topValuable.map(v=>`<tr><td>${ic(escapeHtml(v.r.title),'title',v.r.title)}</td><td>${ic(escapeHtml(cleanArtistDisplay(v.r)),'artist',cleanArtistDisplay(v.r))}</td><td class="num">${fmtMoneyDisplay(v.amount,v.currency)}</td></tr>`).join('')}</tbody>
             </table>
           </div>
         </div>
@@ -1714,20 +1740,20 @@
       <div class="insight-section">
         <h3>Beyond the metadata</h3>
         <div class="chart-grid">
-          ${Object.keys(s.countryMap).length ? `<div class="ds-card chart-box"><h4>Pressing countries</h4><div class="chart-tall-wrap" id="chartCountriesWrap"><canvas id="chartCountries"></canvas></div></div>` : ''}
-          ${s.topCredits.length ? `<div class="ds-card chart-box wide">
+          ${Object.keys(s.countryMap).length ? `<div class="chart-box"><h4>Pressing countries</h4><div class="chart-tall-wrap" id="chartCountriesWrap"><canvas id="chartCountries"></canvas></div></div>` : ''}
+          ${s.topCredits.length ? `<div class="chart-box wide">
             <h4>Most-credited names on your shelf (besides headline artists)</h4>
             <table class="leaderboard">
               <thead><tr><th>Name</th><th>Role(s)</th><th style="text-align:right;">Records</th></tr></thead>
               <tbody>${s.topCredits.map(c=>`<tr><td class="insight-clickable" data-ik="credit" data-iv="${c.id}" data-ilabel="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td><td>${escapeHtml([...c.roles].slice(0,3).join(', '))}</td><td class="num">${c.count}</td></tr>`).join('')}</tbody>
             </table>
           </div>` : ''}
-          ${s.topRarityGems.length ? `<div class="ds-card chart-box wide">
+          ${s.topRarityGems.length ? `<div class="chart-box wide">
             <h4>Hardest to find, most wanted</h4>
             <p class="value-note" style="margin:-4px 0 12px;">Ranked by want ÷ (have + 1) among the ${s.enrichedCount} records checked so far — high want count, low number of other owners on Discogs.</p>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th style="text-align:right;">Have</th><th style="text-align:right;">Want</th><th style="text-align:right;">Ratio</th></tr></thead>
-              <tbody>${s.topRarityGems.map(g=>`<tr><td>${ic(escapeHtml(g.r.title),'title',g.r.title)} <span style="color:var(--line);">— ${ic(escapeHtml(g.r.artistDisplay),'artist',g.r.artistDisplay)}</span></td><td class="num">${g.have}</td><td class="num">${g.want}</td><td class="num">${g.ratio.toFixed(1)}</td></tr>`).join('')}</tbody>
+              <tbody>${s.topRarityGems.map(g=>`<tr><td>${ic(escapeHtml(g.r.title),'title',g.r.title)} <span style="color:var(--line);">— ${ic(escapeHtml(cleanArtistDisplay(g.r)),'artist',cleanArtistDisplay(g.r))}</span></td><td class="num">${g.have}</td><td class="num">${g.want}</td><td class="num">${g.ratio.toFixed(1)}</td></tr>`).join('')}</tbody>
             </table>
           </div>` : ''}
         </div>
@@ -1764,7 +1790,7 @@
 
   function drawInsightCharts(s){
     if(typeof Chart === 'undefined') return; // CDN unreachable/offline — page still works without charts
-    Chart.defaults.color = '#1B2B3D';
+    Chart.defaults.color = '#ded2b4';
     Chart.defaults.borderColor = 'rgba(236,227,206,0.12)';
     Chart.defaults.font.family = "'IBM Plex Mono', monospace";
 
@@ -1797,7 +1823,7 @@
     }
     makeChart('chartFormat', {
       type:'doughnut',
-      data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#FFFFFF', borderWidth:2 }] },
+      data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#16130f', borderWidth:2 }] },
       options:{
         onClick: (evt, elements) => { if(elements.length) formatMixAction(elements[0].index); },
         onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
@@ -1899,7 +1925,7 @@
     }
   }
 
-  let enrichPassRunning = false, enrichPassCancelled = false;
+  let enrichPassRunning = false, enrichPassCancelled = false, enrichDone = 0, enrichTotal = 0;
   async function runEnrichPass(force){
     if(enrichPassRunning){ enrichPassCancelled = true; return; }
     if(!currentToken()){
@@ -1913,25 +1939,32 @@
       if(!ok) return;
     }
     enrichPassRunning = true; enrichPassCancelled = false;
-    let done = 0;
+    enrichDone = 0; enrichTotal = items.length;
+    updateEnrichButton();
     let erroredMessage = null;
     for(const r of items){
       if(enrichPassCancelled) break;
       try{ await fetchEnrichment(r.id, force); }
       catch(err){ erroredMessage = err.message; break; }
-      done++;
-      if(done % 5 === 0 || done === items.length){
-        const p = el('enrichProgress');
-        if(p) p.textContent = `Checked ${done} of ${items.length}…`;
-        if(currentView.type === 'insights') renderInsightsView();
-      }
+      enrichDone++;
+      updateEnrichButton();
+      if(enrichDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
     }
     enrichPassRunning = false;
     if(currentView.type === 'insights') renderInsightsView();
     if(erroredMessage){
       const p = el('enrichProgress');
-      if(p) p.textContent = `Stopped after an error (${done} checked first): ${erroredMessage}`;
+      if(p) p.textContent = `Stopped after an error (${enrichDone} checked first): ${erroredMessage}`;
     }
+  }
+  function updateEnrichButton(){
+    const btn = el('enrichBtn');
+    const p = el('enrichProgress');
+    if(btn){
+      btn.textContent = enrichPassRunning ? `⏹ Stop (${enrichDone} of ${enrichTotal})` : 'Enrich my collection';
+      btn.classList.toggle('running', enrichPassRunning);
+    }
+    if(p && enrichPassRunning) p.textContent = `Checking record ${enrichDone} of ${enrichTotal}…`;
   }
 
   // ---------- value pass (opt-in background pricing) ----------

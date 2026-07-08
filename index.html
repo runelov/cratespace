@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-color-scheme="dark">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -10,15 +10,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="CrateSpace">
-<meta name="theme-color" content="#1E2B3C">
+<meta name="theme-color" content="#16130f">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://altinncdn.no/fonts/inter/v4.1/inter.css" integrity="sha384-OcHzc/By/OPw9uJREawUCjP2inbOGKtKb4A/I2iXxmknUfog2H8Adx71tWVZRscD" crossorigin="anonymous">
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=2026-07-07.30">
+<link rel="stylesheet" href="styles.css?v=2026-07-07.33">
 </head>
 <body>
 
@@ -26,7 +23,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.30</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.33</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -37,18 +34,18 @@
     <div class="sync-panel">
       <input id="username" name="deadwax-discogs-username" type="text" placeholder="discogs username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <input id="token" name="deadwax-discogs-token" type="text" placeholder="personal access token (optional)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <button class="ds-button btn" id="syncBtn" title="Fetch only records added since your last sync">Sync my crate</button>
-      <button class="ds-button btn ghost small" id="fullSyncCrateBtn" title="Rebuild your whole crate from scratch — also catches anything you've removed on Discogs">Full resync</button>
-      <button class="ds-button btn ghost" id="syncWantBtn" title="Fetch only items added since your last sync">Sync wantlist</button>
-      <button class="ds-button btn ghost small" id="fullSyncWantBtn" title="Rebuild your whole wantlist from scratch">Full resync</button>
-      <button class="ds-button btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
+      <button class="btn" id="syncBtn" title="Fetch only records added since your last sync">Sync my crate</button>
+      <button class="btn ghost small" id="fullSyncCrateBtn" title="Rebuild your whole crate from scratch — also catches anything you've removed on Discogs">Full resync</button>
+      <button class="btn ghost" id="syncWantBtn" title="Fetch only items added since your last sync">Sync wantlist</button>
+      <button class="btn ghost small" id="fullSyncWantBtn" title="Rebuild your whole wantlist from scratch">Full resync</button>
+      <button class="btn ghost" id="clearCacheBtn" title="Forget everything cached in this browser">Clear cache</button>
     </div>
     <div class="sync-panel" style="margin-top:8px;">
       <input id="ghRepo" name="deadwax-github-repo" type="text" placeholder="github-username/repo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:190px;">
       <input id="ghPath" name="deadwax-github-path" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:150px;">
       <input id="ghToken" name="deadwax-github-token" type="text" placeholder="github token" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <button class="ds-button btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
-      <button class="ds-button btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
+      <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
+      <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
     </div>
     <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
     <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
@@ -98,8 +95,8 @@
         </select>
       </label>
       <div class="progress" id="valueProgress"></div>
-      <button class="ds-button btn small" id="valueBtn" title="Price only records that haven't been looked up yet">Estimate value</button>
-      <button class="ds-button btn ghost small" id="valueRefreshBtn" title="Re-check the price of every record, even ones already priced">Refresh all</button>
+      <button class="btn small" id="valueBtn" title="Price only records that haven't been looked up yet">Estimate value</button>
+      <button class="btn ghost small" id="valueRefreshBtn" title="Re-check the price of every record, even ones already priced">Refresh all</button>
     </div>
   </div>
 
@@ -129,7 +126,7 @@
       </div>
       <span class="count-tag" id="countTag">0 records</span>
       <span class="insight-filter-chip" id="insightFilterChip" style="display:none;"></span>
-      <button class="ds-button btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
+      <button class="btn ghost small filters-toggle-btn" id="filtersToggleBtn">☰ Filters</button>
     </div>
   </div>
 </div>
@@ -168,10 +165,10 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.30</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>CrateSpace <span id="buildStamp">build 2026-07-07.33</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
-<script src="app.js?v=2026-07-07.30"></script>
+<script src="app.js?v=2026-07-07.33"></script>
 </body>
 </html>
