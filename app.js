@@ -171,8 +171,8 @@
 
   function fmtDate(iso){
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }) +
-      ' ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+    return d.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) +
+      ' ' + d.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });
   }
   function fmtMoney(value, currency){
     try{ return new Intl.NumberFormat(undefined, { style:'currency', currency: currency || 'USD', maximumFractionDigits:0, minimumFractionDigits:0 }).format(value); }
@@ -309,7 +309,7 @@
   function mapEntry(entry){
     const bi = entry.basic_information || {};
     const artists = (bi.artists||[]).map(a=>({ id:a.id, name:(a.name||'').replace(/\s\(\d+\)$/,'') }));
-    const labels = (bi.labels||[]).map(l=>({ id:l.id, name:l.name, catno:l.catno }));
+    const labels = (bi.labels||[]).map(l=>({ id:l.id, name:(l.name||'').replace(/\s\(\d+\)$/,''), catno:l.catno }));
     const formatDescriptions = (bi.formats||[]).flatMap(f=>f.descriptions||[]);
     return {
       id: entry.id,
@@ -481,7 +481,7 @@
     let entry;
     if(resp.ok){
       const data = await resp.json();
-      entry = { name: data.name, profile: data.profile || '', fetchedAt: Date.now() };
+      entry = { name: (data.name||'').replace(/\s\(\d+\)$/,''), profile: data.profile || '', fetchedAt: Date.now() };
     }else{
       entry = { name:'', profile:'', error:true, fetchedAt: Date.now() };
     }
@@ -496,7 +496,7 @@
     let entry;
     if(resp.ok){
       const data = await resp.json();
-      entry = { name: data.name, profile: data.profile || '', fetchedAt: Date.now() };
+      entry = { name: (data.name||'').replace(/\s\(\d+\)$/,''), profile: data.profile || '', fetchedAt: Date.now() };
     }else{
       entry = { name:'', profile:'', error:true, fetchedAt: Date.now() };
     }
@@ -681,9 +681,9 @@
     const priceBadge = iv
       ? `<div class="price-badge" title="${iv.exact ? `Priced at your copy's condition (${escapeHtml(r.condition)})` : 'Estimated using the assumed condition — actual condition not on record'}">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</div>` : '';
     const wantRibbon = isWant ? `<div class="want-ribbon">Want</div>` : '';
-    const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
+    const artistLinks = r.artists.map(a=>`<span class="ds-link artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
     const firstLabel = r.labels[0];
-    const labelLink = firstLabel ? `<span class="label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(firstLabel.name)}">${escapeHtml(firstLabel.name)}</span>` : '—';
+    const labelLink = firstLabel ? `<span class="ds-link label-link" data-type="label" data-id="${firstLabel.id}" data-name="${escapeHtml(firstLabel.name)}">${escapeHtml(firstLabel.name)}</span>` : '—';
 
     if(viewMode === 'list'){
       const listPrice = iv ? `<span class="list-price">${iv.exact?'':'~'}${fmtMoneyDisplay(iv.amount, iv.currency)}</span>` : '';
@@ -810,8 +810,8 @@
     if(!r){ r = wantlist.find(x=>x.id===id); if(r) sourceList = 'wantlist'; }
     if(!r) return;
     const art = r.cover ? `<img src="${r.cover}" alt="">` : `<div class="no-art">${escapeHtml(r.title)}</div>`;
-    const artistLinks = r.artists.map(a=>`<span class="artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
-    const labelLinks = r.labels.map(l=>`<span class="label-link" data-type="label" data-id="${l.id}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)}</span>`).join(', ') || '—';
+    const artistLinks = r.artists.map(a=>`<span class="ds-link artist-link" data-type="artist" data-id="${a.id}" data-name="${escapeHtml(a.name)}">${escapeHtml(a.name)}</span>`).join(', ');
+    const labelLinks = r.labels.map(l=>`<span class="ds-link label-link" data-type="label" data-id="${l.id}" data-name="${escapeHtml(l.name)}">${escapeHtml(l.name)}</span>`).join(', ') || '—';
     modalRoot.innerHTML = `
       <div class="modal-backdrop" id="backdrop">
         <div class="modal">
@@ -828,10 +828,10 @@
               <div class="stamp">${escapeHtml(r.formats.join(' / ')||'—')}</div>
               <div class="stamp">${escapeHtml(r.catno||'no cat#')}</div>
               <div style="margin-top:8px;">
-                ${r.genres.map(g=>`<span class="tag">${escapeHtml(g)}</span>`).join('')}
-                ${r.styles.map(s=>`<span class="tag" style="background:var(--rust)">${escapeHtml(s)}</span>`).join('')}
+                ${r.genres.map(g=>`<span class="ds-tag tag">${escapeHtml(g)}</span>`).join('')}
+                ${r.styles.map(s=>`<span class="ds-tag tag" style="background:var(--rust)">${escapeHtml(s)}</span>`).join('')}
               </div>
-              <div style="margin-top:10px;font-size:12.5px;color:#6b6250;">${labelLinks}</div>
+              <div style="margin-top:10px;font-size:12.5px;color:#8593A3;">${labelLinks}</div>
               <div class="value-block">
                 <h4>Value</h4>
                 <div id="valueBody"></div>
@@ -941,7 +941,7 @@
       body.innerHTML = `<div class="value-note">Add a personal access token above to look up value estimates.</div>`;
       return;
     }
-    body.innerHTML = `<button class="btn small" id="lookupValueBtn">Look up value</button>`;
+    body.innerHTML = `<button class="ds-button btn small" id="lookupValueBtn">Look up value</button>`;
     const btn = el('lookupValueBtn');
     if(btn) btn.addEventListener('click', async ()=>{
       btn.disabled = true;
@@ -973,8 +973,8 @@
           <div class="confirm-title">${escapeHtml(title)}</div>
           <div class="confirm-message">${message}</div>
           <div class="confirm-actions">
-            <button class="btn ghost small" id="confirmCancelBtn">${escapeHtml(cancelLabel)}</button>
-            <button class="btn small" id="confirmOkBtn">${escapeHtml(confirmLabel)}</button>
+            <button class="ds-button btn ghost small" id="confirmCancelBtn">${escapeHtml(cancelLabel)}</button>
+            <button class="ds-button btn small" id="confirmOkBtn">${escapeHtml(confirmLabel)}</button>
           </div>
         </div>`;
       document.body.appendChild(root);
@@ -1274,8 +1274,8 @@
         <div class="ctrl">
           <label>Deals (opt-in — one Discogs request per record)</label>
           <div>
-            <button class="btn small" id="dealPassBtn">Check for deals</button>
-            <button class="btn ghost small" id="dealRefreshBtn">Refresh all</button>
+            <button class="ds-button btn small" id="dealPassBtn">Check for deals</button>
+            <button class="ds-button btn ghost small" id="dealRefreshBtn">Refresh all</button>
           </div>
         </div>
         <div class="gaps-note" id="gapsProgress">
@@ -1577,7 +1577,7 @@
       paras.push(`Your oldest pressing dates to ${ic(`<b>${s.oldest.year}</b>`,'decade',oldDecade)} (${ic(escapeHtml(s.oldest.title),'title',s.oldest.title)} by ${ic(escapeHtml(s.oldest.artistDisplay),'artist',s.oldest.artistDisplay)}); your newest catch is from ${ic(`<b>${s.newest.year}</b>`,'decade',newDecade)}.`);
     }
     if(s.firstAdded){
-      const fmtShort = iso => new Date(iso).toLocaleDateString(undefined,{ year:'numeric', month:'long' });
+      const fmtShort = iso => new Date(iso).toLocaleDateString('en-US',{ year:'numeric', month:'long' });
       let p = `You've been logging records here since <b>${fmtShort(s.firstAdded)}</b>`;
       if(s.avgPerMonth) p += `, averaging roughly <b>${s.avgPerMonth < 1 ? s.avgPerMonth.toFixed(1) : Math.round(s.avgPerMonth)}</b> a month`;
       paras.push(p + '.');
@@ -1660,7 +1660,7 @@
     if(s.medianHave!=null) statCards.push({ lab:'Median community "have"', val:Math.round(s.medianHave), sub:`of ${s.enrichedCount} checked` });
 
     const statCardsHtml = statCards.map(c=>{
-      const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="stat-card"';
+      const clickAttrs = c.click ? ` class="stat-card insight-clickable" data-ik="${c.click.ik}" data-iv="${escapeHtml(String(c.click.iv))}"` : ' class="ds-card stat-card"';
       return `<div${clickAttrs}><div class="lab">${escapeHtml(c.lab)}</div><div class="val">${escapeHtml(String(c.val))}</div>${c.sub?`<div class="sub">${escapeHtml(c.sub)}</div>`:''}</div>`;
     }).join('');
 
@@ -1668,25 +1668,25 @@
       <div class="enrich-panel">
         <div class="txt">Unlock total playtime, pressing countries, community-obscurity, and hidden-collaborator insights by checking each record's full details (one Discogs request per record, cached afterward — opening a record's modal also does this for free, one at a time).</div>
         <div class="progress" id="enrichProgress"></div>
-        <button class="btn small" id="enrichBtn">Enrich my collection</button>
-        <button class="btn ghost small" id="enrichRefreshBtn">Refresh all</button>
+        <button class="ds-button btn small" id="enrichBtn">Enrich my collection</button>
+        <button class="ds-button btn ghost small" id="enrichRefreshBtn">Refresh all</button>
       </div>`;
 
     const chartsHtml = `
       <div class="insight-section">
         <h3>The shape of your crate</h3>
         <div class="chart-grid">
-          <div class="chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
-          <div class="chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
-          <div class="chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
-          <div class="chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
-          <div class="chart-box wide">
+          <div class="ds-card chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
+          <div class="ds-card chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
+          <div class="ds-card chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
+          <div class="ds-card chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
+          <div class="ds-card chart-box wide">
             <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
               <span>Collecting over time</span>
               <span class="timeline-cutoff-ctrl">
                 Hide activity before
                 <input type="date" id="timelineCutoffInput" value="${timelineCutoff||''}">
-                ${timelineCutoff ? '<button class="btn ghost small" id="timelineCutoffClear">Clear</button>' : ''}
+                ${timelineCutoff ? '<button class="ds-button btn ghost small" id="timelineCutoffClear">Clear</button>' : ''}
               </span>
             </h4>
             <canvas id="chartTimeline"></canvas>
@@ -1698,9 +1698,9 @@
       <div class="insight-section">
         <h3>Where the value sits</h3>
         <div class="chart-grid">
-          <div class="chart-box"><h4>Value by genre</h4><canvas id="chartValueGenre"></canvas></div>
-          <div class="chart-box"><h4>Value by decade</h4><canvas id="chartValueDecade"></canvas></div>
-          <div class="chart-box wide">
+          <div class="ds-card chart-box"><h4>Value by genre</h4><canvas id="chartValueGenre"></canvas></div>
+          <div class="ds-card chart-box"><h4>Value by decade</h4><canvas id="chartValueDecade"></canvas></div>
+          <div class="ds-card chart-box wide">
             <h4>Most valuable records</h4>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th>Artist</th><th style="text-align:right;">Est. value</th></tr></thead>
@@ -1714,15 +1714,15 @@
       <div class="insight-section">
         <h3>Beyond the metadata</h3>
         <div class="chart-grid">
-          ${Object.keys(s.countryMap).length ? `<div class="chart-box"><h4>Pressing countries</h4><div class="chart-tall-wrap" id="chartCountriesWrap"><canvas id="chartCountries"></canvas></div></div>` : ''}
-          ${s.topCredits.length ? `<div class="chart-box wide">
+          ${Object.keys(s.countryMap).length ? `<div class="ds-card chart-box"><h4>Pressing countries</h4><div class="chart-tall-wrap" id="chartCountriesWrap"><canvas id="chartCountries"></canvas></div></div>` : ''}
+          ${s.topCredits.length ? `<div class="ds-card chart-box wide">
             <h4>Most-credited names on your shelf (besides headline artists)</h4>
             <table class="leaderboard">
               <thead><tr><th>Name</th><th>Role(s)</th><th style="text-align:right;">Records</th></tr></thead>
               <tbody>${s.topCredits.map(c=>`<tr><td class="insight-clickable" data-ik="credit" data-iv="${c.id}" data-ilabel="${escapeHtml(c.name)}">${escapeHtml(c.name)}</td><td>${escapeHtml([...c.roles].slice(0,3).join(', '))}</td><td class="num">${c.count}</td></tr>`).join('')}</tbody>
             </table>
           </div>` : ''}
-          ${s.topRarityGems.length ? `<div class="chart-box wide">
+          ${s.topRarityGems.length ? `<div class="ds-card chart-box wide">
             <h4>Hardest to find, most wanted</h4>
             <p class="value-note" style="margin:-4px 0 12px;">Ranked by want ÷ (have + 1) among the ${s.enrichedCount} records checked so far — high want count, low number of other owners on Discogs.</p>
             <table class="leaderboard">
@@ -1764,7 +1764,7 @@
 
   function drawInsightCharts(s){
     if(typeof Chart === 'undefined') return; // CDN unreachable/offline — page still works without charts
-    Chart.defaults.color = '#ded2b4';
+    Chart.defaults.color = '#F4F6F8';
     Chart.defaults.borderColor = 'rgba(236,227,206,0.12)';
     Chart.defaults.font.family = "'IBM Plex Mono', monospace";
 
@@ -1850,9 +1850,13 @@
     });
 
     const months = [...s.addedByMonth.keys()].sort();
+    const monthLabels = months.map(m=>{
+      const [y, mo] = m.split('-').map(Number);
+      return new Date(y, mo-1, 1).toLocaleDateString('en-US', { month:'short', year:'numeric' });
+    });
     makeChart('chartTimeline', {
       type:'line',
-      data:{ labels:months, datasets:[{ data:months.map(m=>s.addedByMonth.get(m)), borderColor:'#d8a51d', backgroundColor:'rgba(216,165,29,0.15)', fill:true, tension:0.25, pointRadius:0 }] },
+      data:{ labels:monthLabels, datasets:[{ data:months.map(m=>s.addedByMonth.get(m)), borderColor:'#d8a51d', backgroundColor:'rgba(216,165,29,0.15)', fill:true, tension:0.25, pointRadius:0 }] },
       options:{ plugins:{legend:{display:false}}, scales:{ x:{ ticks:{maxTicksLimit:10} }, y:{ ticks:{precision:0} } } }
     });
 
