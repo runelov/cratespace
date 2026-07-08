@@ -386,7 +386,7 @@
 
   async function storeEnrichmentFromReleaseData(releaseId, data){
     const totalDurationSec = (data.tracklist||[]).reduce((sum,t)=> sum + parseDurationToSeconds(t.duration), 0);
-    const credits = (data.extraartists||[]).map(a=>({ id:a.id, name:(a.name||'').replace(/\s\(\d+\)$/,''), role:a.role||'' }));
+    const credits = (data.extraartists||[]).filter(a=>typeof a.id === 'number').map(a=>({ id:a.id, name:(a.name||'').replace(/\s\(\d+\)$/,''), role:a.role||'' }));
     const entry = {
       country: data.country || null,
       communityHave: data.community?.have ?? null,
@@ -562,7 +562,7 @@
       }
       if(filters.formatDesc && !matchesFormatMixValue(r, filters.formatDesc)) return false;
       if(filters.country && enrichCache[r.id]?.country !== filters.country) return false;
-      if(filters.creditId && !(enrichCache[r.id]?.credits||[]).some(c=>c.id===filters.creditId)) return false;
+      if(filters.creditId != null && !(enrichCache[r.id]?.credits||[]).some(c=>c.id===filters.creditId)) return false;
       if(searchTerm){
         const hay = `${r.artistDisplay} ${r.title} ${r.labels.map(l=>l.name).join(' ')} ${r.catno} ${r.genres.join(' ')} ${r.styles.join(' ')}`.toLowerCase();
         if(!hay.includes(searchTerm)) return false;
@@ -831,7 +831,7 @@
                 ${r.genres.map(g=>`<span class="ds-tag tag">${escapeHtml(g)}</span>`).join('')}
                 ${r.styles.map(s=>`<span class="ds-tag tag" style="background:var(--rust)">${escapeHtml(s)}</span>`).join('')}
               </div>
-              <div style="margin-top:10px;font-size:12.5px;color:#8593A3;">${labelLinks}</div>
+              <div style="margin-top:10px;font-size:12.5px;color:var(--line);">${labelLinks}</div>
               <div class="value-block">
                 <h4>Value</h4>
                 <div id="valueBody"></div>
@@ -1072,7 +1072,7 @@
     if(opts.format) filters.format = opts.format;
     if(opts.formatDesc) filters.formatDesc = opts.formatDesc;
     if(opts.country) filters.country = opts.country;
-    if(opts.creditId) filters.creditId = opts.creditId;
+    if(opts.creditId != null) filters.creditId = opts.creditId;
     if(opts.search){ searchTerm = opts.search.toLowerCase(); searchInput.value = opts.search; }
     setInsightFilterChip(opts.label || null);
     showBrowseView();
@@ -1482,7 +1482,7 @@
       if(e.country) countryMap[e.country] = (countryMap[e.country]||0)+1;
       const seen = new Set();
       (e.credits||[]).forEach(c=>{
-        if(!c.id || seen.has(c.id)) return;
+        if(c.id == null || seen.has(c.id)) return;
         seen.add(c.id);
         if(!creditMap.has(c.id)) creditMap.set(c.id, { name:c.name, count:0, roles:new Set() });
         const entry = creditMap.get(c.id);
@@ -1632,7 +1632,7 @@
     if(chartInstances[canvasId]){ chartInstances[canvasId].destroy(); }
     chartInstances[canvasId] = new Chart(canvas.getContext('2d'), config);
   }
-  const PALETTE = ['#d8a51d','#9a3324','#49603f','#7c715a','#c98b3a','#6b2e22','#3a4a30','#a89b7c','#e0c068','#b5493a'];
+  const PALETTE = ['#0062BA','#C7292E','#8A5A00','#0055A4','#4A5A6B','#5C6B7A','#1B2B3D','#7FA8D9','#D98A8D','#C9A45C'];
 
   function renderInsightsView(){
     const s = computeInsights();
@@ -1764,7 +1764,7 @@
 
   function drawInsightCharts(s){
     if(typeof Chart === 'undefined') return; // CDN unreachable/offline — page still works without charts
-    Chart.defaults.color = '#F4F6F8';
+    Chart.defaults.color = '#1B2B3D';
     Chart.defaults.borderColor = 'rgba(236,227,206,0.12)';
     Chart.defaults.font.family = "'IBM Plex Mono', monospace";
 
@@ -1797,7 +1797,7 @@
     }
     makeChart('chartFormat', {
       type:'doughnut',
-      data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#16130f', borderWidth:2 }] },
+      data:{ labels:formatEntries.map(e=>e[0]), datasets:[{ data:formatEntries.map(e=>e[1]), backgroundColor:PALETTE, borderColor:'#FFFFFF', borderWidth:2 }] },
       options:{
         onClick: (evt, elements) => { if(elements.length) formatMixAction(elements[0].index); },
         onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; },
