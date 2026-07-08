@@ -2465,12 +2465,30 @@
       if(!ok){ ghNote.innerHTML = ghNoteDefault; ghPushBtn.disabled=false; ghPullBtn.disabled=false; return; }
       const { failures } = await applyBackupPayload(payload);
       reportImportOutcome(payload.username, failures, crateCount, wantCount);
-      location.reload();
+      await reinitializeFromStorage(payload.username);
+      ghNote.innerHTML = `Pulled from GitHub just now — <b>${collection.length}</b> crate records, <b>${wantlist.length}</b> wantlist items.`;
     }catch(err){
       ghNote.innerHTML = `<span style="color:var(--rust)">${escapeHtml(err.message)}</span>`;
+    }finally{
       ghPushBtn.disabled = false; ghPullBtn.disabled = false;
     }
   });
+
+  // Reloads everything from storage into the already-running app, without a
+  // location.reload() — a full reload would wipe the token fields (and
+  // anything else deliberately never persisted), which was the actual
+  // source of the annoyance this replaces.
+  async function reinitializeFromStorage(username){
+    usernameInput.value = username;
+    await loadAllCaches();
+    const cachedCrate = await idbGet(collectionKey(username));
+    const cachedWant = await idbGet(wantlistKey(username));
+    collection = cachedCrate?.items || [];
+    wantlist = cachedWant?.items || [];
+    switchDataset('crate');
+    refreshNav();
+    updateValueBar();
+  }
 
 
   let searchDebounce;
