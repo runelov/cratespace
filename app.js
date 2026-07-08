@@ -1198,7 +1198,7 @@
   const TARGET_FORMATS = ['LP','7"','12"','Box Set'];
   let gapMinOwned = 2;
   let gapFormats = new Set(TARGET_FORMATS);
-  let dealPassRunning = false;
+  let dealPassRunning = false, dealDone = 0, dealTotal = 0;
   let dealPassCancelled = false;
 
   function hasTargetFormat(r, formatSet){
@@ -1281,13 +1281,19 @@
         <div class="ctrl">
           <label>Deals (opt-in — one Discogs request per record)</label>
           <div>
-            <button class="btn small" id="dealPassBtn">Check for deals</button>
+            <button class="btn small${dealPassRunning ? ' running' : ''}" id="dealPassBtn">${dealPassRunning ? `⏹ Stop (${dealDone} of ${dealTotal})` : 'Check for deals'}</button>
             <button class="btn ghost small" id="dealRefreshBtn">Refresh all</button>
           </div>
         </div>
+        <div class="ctrl">
+          <label>Buying from one seller</label>
+          <div>
+            <a class="btn ghost small" href="https://www.discogs.com/mywantlist" target="_blank" rel="noopener">Find sellers with multiple wants →</a>
+          </div>
+        </div>
         <div class="gaps-note" id="gapsProgress">
-          Artists you own <b>${gapMinOwned}+</b> of (in ${TARGET_FORMATS.filter(f=>gapFormats.has(f)).join(', ')||'—'}) with something still on your wantlist.
-          ${missingFormats ? ' Your cached crate predates format tracking — run a <b>Full resync</b> of your crate for accurate results here.' : ''}
+          ${dealPassRunning ? `<b style="color:var(--mustard);">Checking record ${dealDone} of ${dealTotal}…</b>` : `Artists you own <b>${gapMinOwned}+</b> of (in ${TARGET_FORMATS.filter(f=>gapFormats.has(f)).join(', ')||'—'}) with something still on your wantlist.
+          ${missingFormats ? ' Your cached crate predates format tracking — run a <b>Full resync</b> of your crate for accurate results here.' : ''}`}
         </div>
       </div>`;
 
@@ -1369,7 +1375,8 @@
     const items = groups.flatMap(g=>g.wanted);
     const todo = force ? items : items.filter(r => !marketCache[r.id]);
     dealPassRunning = true; dealPassCancelled = false;
-    let done = 0;
+    dealDone = 0; dealTotal = todo.length;
+    updateDealButton();
     let erroredMessage = null;
     for(const r of todo){
       if(dealPassCancelled) break;
@@ -1380,19 +1387,25 @@
         erroredMessage = err.message;
         break;
       }
-      done++;
-      if(done % 3 === 0 || done === todo.length){
-        const p = el('gapsProgress');
-        if(p) p.textContent = `Checked ${done} of ${todo.length}…`;
-        if(currentView.type === 'gaps') renderGapsView();
-      }
+      dealDone++;
+      updateDealButton();
+      if(dealDone % 8 === 0 && currentView.type === 'gaps') renderGapsView();
     }
     dealPassRunning = false;
     if(currentView.type === 'gaps') renderGapsView();
     if(erroredMessage){
       const p = el('gapsProgress');
-      if(p) p.textContent = `Stopped after an error (${done} checked first): ${erroredMessage}`;
+      if(p) p.textContent = `Stopped after an error (${dealDone} checked first): ${erroredMessage}`;
     }
+  }
+  function updateDealButton(){
+    const btn = el('dealPassBtn');
+    if(btn){
+      btn.textContent = dealPassRunning ? `⏹ Stop (${dealDone} of ${dealTotal})` : 'Check for deals';
+      btn.classList.toggle('running', dealPassRunning);
+    }
+    const p = el('gapsProgress');
+    if(p && dealPassRunning) p.innerHTML = `<b style="color:var(--mustard);">Checking record ${dealDone} of ${dealTotal}…</b>`;
   }
 
   // ---------- insights ----------

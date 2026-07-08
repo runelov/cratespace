@@ -55,6 +55,7 @@
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:0.06em;
     font-size:12px; font-weight:600; border-radius:var(--radius); cursor:pointer;
     transition:transform .12s ease, background .12s ease;
+    display:inline-block; text-decoration:none;
   }
   .btn:hover{ background:#eab938; transform:translateY(-1px); }
   .btn:active{ transform:translateY(0); }
