@@ -137,10 +137,10 @@
   }
   .insight-filter-chip{
     display:inline-flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:11px;
-    color:var(--paper-dim); background:var(--moss); padding:8px 10px; border-radius:var(--radius); white-space:nowrap;
+    color:#fff; background:var(--mustard); padding:8px 10px; border-radius:var(--radius); white-space:nowrap;
   }
   .insight-filter-chip b{ color:#fff; }
-  .insight-filter-chip .chip-x{ cursor:pointer; color:var(--paper); opacity:0.7; }
+  .insight-filter-chip .chip-x{ cursor:pointer; color:#fff; opacity:0.8; }
   .insight-filter-chip .chip-x:hover{ opacity:1; }
   .insight-clickable{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px; }
   .insight-clickable:hover{ color:var(--mustard); }

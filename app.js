@@ -1536,7 +1536,7 @@
           case 'title': goToCrateWithFilter({ search:value, label:`Title — ${value}` }); break;
           case 'formatDesc': goToCrateWithFilter({ formatDesc:value, label:`Format — ${value}` }); break;
           case 'country': goToCrateWithFilter({ country:value, label:`Pressing country — ${value}` }); break;
-          case 'credit': goToCrateWithFilter({ creditId:Number(value), label:`Credit — ${label}` }); break;
+          case 'credit': goToCrateWithFilter({ creditId:Number(value), label:`Credit — ${label} (id ${value})` }); break;
         }
       });
     });
