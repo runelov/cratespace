@@ -560,24 +560,26 @@
     return matches.includes(value);
   }
 
+  function matchesFilters(r, exclude){
+    if(exclude!=='format' && filters.format && !r.formats.includes(filters.format)) return false;
+    if(exclude!=='genre' && filters.genre && !(r.genres.includes(filters.genre) || r.styles.includes(filters.genre))) return false;
+    if(exclude!=='decade' && filters.decade){
+      if(!r.year) return false;
+      if(Math.floor(r.year/10)*10 !== filters.decade) return false;
+    }
+    if(filters.formatDesc && !matchesFormatMixValue(r, filters.formatDesc)) return false;
+    if(filters.country && enrichCache[r.id]?.country !== filters.country) return false;
+    if(filters.creditId != null && !(enrichCache[r.id]?.credits||[]).some(c=>c.id===filters.creditId)) return false;
+    if(searchTerm){
+      const hay = `${r.artistDisplay} ${r.title} ${r.labels.map(l=>l.name).join(' ')} ${r.catno} ${r.genres.join(' ')} ${r.styles.join(' ')}`.toLowerCase();
+      if(!hay.includes(searchTerm)) return false;
+    }
+    return true;
+  }
+
   function applyFiltersAndSort(){
     const items = activeItems();
-    filtered = items.filter(r=>{
-      if(filters.format && !r.formats.includes(filters.format)) return false;
-      if(filters.genre && !(r.genres.includes(filters.genre) || r.styles.includes(filters.genre))) return false;
-      if(filters.decade){
-        if(!r.year) return false;
-        if(Math.floor(r.year/10)*10 !== filters.decade) return false;
-      }
-      if(filters.formatDesc && !matchesFormatMixValue(r, filters.formatDesc)) return false;
-      if(filters.country && enrichCache[r.id]?.country !== filters.country) return false;
-      if(filters.creditId != null && !(enrichCache[r.id]?.credits||[]).some(c=>c.id===filters.creditId)) return false;
-      if(searchTerm){
-        const hay = `${r.artistDisplay} ${r.title} ${r.labels.map(l=>l.name).join(' ')} ${r.catno} ${r.genres.join(' ')} ${r.styles.join(' ')}`.toLowerCase();
-        if(!hay.includes(searchTerm)) return false;
-      }
-      return true;
-    });
+    filtered = items.filter(r=>matchesFilters(r, null));
     const sortMode = sortSelect.value;
     filtered.sort((a,b)=>{
       switch(sortMode){
@@ -739,13 +741,15 @@
     const items = activeItems();
     const formats = {}, decades = {}, genreMap = {};
     items.forEach(r=>{
-      [...new Set(r.formats)].forEach(f => formats[f] = (formats[f]||0)+1);
-      if(r.year){ const d = Math.floor(r.year/10)*10; decades[d] = (decades[d]||0)+1; }
-      let source = [];
-      if(genreMode === 'genre') source = r.genres;
-      else if(genreMode === 'style') source = r.styles;
-      else source = r.genres.concat(r.styles);
-      source.forEach(g => genreMap[g] = (genreMap[g]||0)+1);
+      if(matchesFilters(r, 'format')) [...new Set(r.formats)].forEach(f => formats[f] = (formats[f]||0)+1);
+      if(matchesFilters(r, 'decade') && r.year){ const d = Math.floor(r.year/10)*10; decades[d] = (decades[d]||0)+1; }
+      if(matchesFilters(r, 'genre')){
+        let source = [];
+        if(genreMode === 'genre') source = r.genres;
+        else if(genreMode === 'style') source = r.styles;
+        else source = r.genres.concat(r.styles);
+        source.forEach(g => genreMap[g] = (genreMap[g]||0)+1);
+      }
     });
     genreGroupLabel.textContent = genreMode === 'genre' ? 'Genre' : (genreMode === 'style' ? 'Style' : 'Genre & Style');
     formatTabs.innerHTML = tabsHtml(formats, filters.format);
@@ -2682,6 +2686,7 @@
     searchDebounce = setTimeout(()=>{
       searchTerm = searchInput.value.trim().toLowerCase();
       setInsightFilterChip(null);
+      buildTabs();
       render();
     }, 150);
   });
