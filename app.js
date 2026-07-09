@@ -7,6 +7,8 @@
   let filtered = [];
   let filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
   let genreMode = 'style';         // 'genre' | 'style' | 'both'
+  let valueGenreMode = localStorage.getItem('cratespace:valueGenreMode') || 'genre';
+  let valueDecadeMode = localStorage.getItem('cratespace:valueDecadeMode') || 'decade';
   let viewMode = localStorage.getItem('cratespace:viewMode') || (matchMedia('(max-width:760px)').matches ? 'compact' : 'large');
   let searchTerm = "";
   let activeDataset = 'crate';     // 'crate' | 'wantlist'
@@ -1206,6 +1208,33 @@
     return r.formatDescriptions.some(d => formatSet.has(d));
   }
 
+  function availableWantlistFormats(){
+    const set = new Set(TARGET_FORMATS); // always keep the original defaults selectable, even if not currently present
+    wantlist.forEach(r=> (r.formatDescriptions||[]).forEach(d=> set.add(d)));
+    return [...set].sort();
+  }
+
+  function computeBestBuys(groups){
+    const seen = new Set();
+    const candidates = [];
+    groups.forEach(g=>{
+      g.wanted.forEach(r=>{
+        if(seen.has(r.id)) return; // a record can belong to more than one artist group (multi-artist releases)
+        seen.add(r.id);
+        const market = marketCache[r.id];
+        if(!market || !market.lowest || !market.numForSale) return;
+        const iv = getItemValue(r);
+        if(!iv) return;
+        const lowestConverted = convertCurrency(market.lowest, market.currency || 'USD', iv.currency).amount;
+        if(!lowestConverted) return;
+        const savingsRatio = iv.amount / lowestConverted; // >1 = listed below estimated value
+        if(savingsRatio <= 1.1) return; // require at least a genuine ~10% discount to bother surfacing it
+        candidates.push({ r, artistName: g.name, lowest: market.lowest, lowestCurrency: market.currency || 'USD', estAmount: iv.amount, estCurrency: iv.currency, savingsRatio, numForSale: market.numForSale });
+      });
+    });
+    return candidates.sort((a,b)=> b.savingsRatio - a.savingsRatio).slice(0,10);
+  }
+
   function isVariousArtist(a){
     return a.id === 194 || /^various(\s+artists)?$/i.test((a.name||'').trim());
   }
@@ -1264,18 +1293,19 @@
     const groups = computeGaps();
     gapsCount.textContent = groups.length;
     const missingFormats = anyMissingFormatData();
+    const bestBuys = computeBestBuys(groups);
     const controlsHtml = `
       <div class="gaps-controls">
         <div class="ctrl">
           <label>Focus formats</label>
           <div class="format-checks" id="gapFormatChecks">
-            ${TARGET_FORMATS.map(f=>`<label><input type="checkbox" value="${escapeHtml(f)}" ${gapFormats.has(f)?'checked':''}> ${escapeHtml(f)}</label>`).join('')}
+            ${availableWantlistFormats().map(f=>`<label><input type="checkbox" value="${escapeHtml(f)}" ${gapFormats.has(f)?'checked':''}> ${escapeHtml(f)}</label>`).join('')}
           </div>
         </div>
         <div class="ctrl">
           <label>Minimum owned</label>
           <select id="gapMinOwnedSelect">
-            ${[1,2,3,4,5,8,10].map(n=>`<option value="${n}" ${n===gapMinOwned?'selected':''}>${n}+ releases</option>`).join('')}
+            ${[1,2,3,4,5,8,10,15,20,30,40,50].map(n=>`<option value="${n}" ${n===gapMinOwned?'selected':''}>${n}+ releases</option>`).join('')}
           </select>
         </div>
         <div class="ctrl">
@@ -1321,10 +1351,27 @@
           </div>`).join('')
       : `<div class="state" style="padding:60px 20px;"><h2>No gaps found yet</h2><p>Either you already own everything you want from your regular artists, your wantlist doesn't overlap with them yet, or your crate needs a sync/resync so format data is available.</p></div>`;
 
+    const bestBuysHtml = bestBuys.length ? `
+      <div class="best-buys">
+        <h3>Best buys right now</h3>
+        <p class="detail-bio" style="margin:0 0 14px;">Ranked by how far below estimated value the current lowest listing sits. Run "Check for deals" above to populate this — only records with both a market listing and an estimated value can show up here.</p>
+        <div class="best-buys-grid">
+          ${bestBuys.map(b=>`
+            <div class="best-buy-item">
+              <div class="gap-item">${sleeveCard(b.r, true)}</div>
+              <div class="best-buy-note">
+                <span class="best-buy-savings">${Math.round((b.savingsRatio-1)*100)}% below est. value</span>
+                <span>Lowest: ${fmtMoney(b.lowest, b.lowestCurrency)} · Est: ${fmtMoneyDisplay(b.estAmount, b.estCurrency)} · ${b.numForSale} for sale</span>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
+
     gapsView.innerHTML = `
       <h2 style="margin:0 0 6px;">Fill the Gaps</h2>
       <p class="detail-bio" style="margin-bottom:0;">Artists you already collect on vinyl, ranked by how deep you're already in — with what's still missing from your wantlist.</p>
       ${controlsHtml}
+      ${bestBuysHtml}
       ${groupsHtml}`;
 
     el('gapFormatChecks').querySelectorAll('input').forEach(cb=>{
@@ -1492,10 +1539,20 @@
     });
     valuedItems.sort((a,b)=>b.amount-a.amount);
     const topValuable = valuedItems.slice(0,10);
-    const valueByGenre = {}, valueByDecade = {};
-    valuedItems.forEach(({r,amount})=>{
-      (r.genres.length?r.genres:['Unknown']).forEach(g=>{ valueByGenre[g] = (valueByGenre[g]||0)+amount; });
-      if(r.year){ const d = Math.floor(r.year/10)*10; valueByDecade[d] = (valueByDecade[d]||0)+amount; }
+    const valueByGenre = {}, valueByStyle = {}, valueByDecade = {}, valueByYear = {};
+    valuedItems.forEach(({r,amount,currency:itemCcy})=>{
+      // Convert to the user's chosen display currency here, at aggregation time —
+      // otherwise these charts silently mix currencies (or show the wrong one
+      // entirely), which is why their totals looked far off from the headline
+      // Est. value figure when that's shown in a converted currency like NOK.
+      const converted = (displayCurrency === 'auto') ? amount : convertCurrency(amount, itemCcy, displayCurrency).amount;
+      (r.genres.length?r.genres:['Unknown']).forEach(g=>{ valueByGenre[g] = (valueByGenre[g]||0)+converted; });
+      (r.styles.length?r.styles:['Unknown']).forEach(st=>{ valueByStyle[st] = (valueByStyle[st]||0)+converted; });
+      if(r.year){
+        const d = Math.floor(r.year/10)*10;
+        valueByDecade[d] = (valueByDecade[d]||0)+converted;
+        valueByYear[r.year] = (valueByYear[r.year]||0)+converted;
+      }
     });
 
     let enrichedCount=0, totalDurationSec=0;
@@ -1514,7 +1571,12 @@
       if(e.country) countryMap[e.country] = (countryMap[e.country]||0)+1;
       const seen = new Set();
       (e.credits||[]).forEach(c=>{
-        if(c.id == null || seen.has(c.id)) return;
+        // id 0 is Discogs' generic placeholder for unregistered/uncredited
+        // names — many unrelated real people and studios share it, so
+        // treating it as one distinct person produces wildly inflated,
+        // misleading counts (this is what caused a single name to appear
+        // "credited" on 164 unrelated records).
+        if(c.id == null || c.id === 0 || seen.has(c.id)) return;
         seen.add(c.id);
         if(!creditMap.has(c.id)) creditMap.set(c.id, { id:c.id, name:c.name, count:0, roles:new Set() });
         const entry = creditMap.get(c.id);
@@ -1552,7 +1614,7 @@
       firstAdded, lastAdded, avgPerMonth, addedByMonth,
       genreMapAll: genreMap, styleMapAll: styleMap, decadeMapAll: decadeMap,
       topStylesList: Object.entries(styleMap).sort((a,b)=>b[1]-a[1]).slice(0,10),
-      priced, valueSum, currency, topValuable, valueByGenre, valueByDecade,
+      priced, valueSum, currency, chartCurrency: (displayCurrency === 'auto' ? currency : displayCurrency), topValuable, valueByGenre, valueByStyle, valueByDecade, valueByYear,
       enrichedCount, totalDurationSec, medianHave, medianWant, countryMap, topCredits, topRarityGems,
       artistMapAll: artistMap, labelMapAll: labelMap, yearCounts
     };
@@ -1737,8 +1799,26 @@
       <div class="insight-section">
         <h3>Where the value sits</h3>
         <div class="chart-grid">
-          <div class="chart-box"><h4>Value by genre</h4><canvas id="chartValueGenre"></canvas></div>
-          <div class="chart-box"><h4>Value by decade</h4><canvas id="chartValueDecade"></canvas></div>
+          <div class="chart-box">
+            <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+              <span>Value by ${valueGenreMode === 'genre' ? 'genre' : 'style'}</span>
+              <span class="view-mode-toggle" id="valueGenreModeToggle" style="font-size:9px;">
+                <button data-mode="genre" class="${valueGenreMode==='genre'?'active':''}">Genre</button>
+                <button data-mode="style" class="${valueGenreMode==='style'?'active':''}">Style</button>
+              </span>
+            </h4>
+            <canvas id="chartValueGenre"></canvas>
+          </div>
+          <div class="chart-box">
+            <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+              <span>Value by ${valueDecadeMode === 'decade' ? 'decade' : 'year'}</span>
+              <span class="view-mode-toggle" id="valueDecadeModeToggle" style="font-size:9px;">
+                <button data-mode="decade" class="${valueDecadeMode==='decade'?'active':''}">Decade</button>
+                <button data-mode="year" class="${valueDecadeMode==='year'?'active':''}">Year</button>
+              </span>
+            </h4>
+            <canvas id="chartValueDecade"></canvas>
+          </div>
           <div class="chart-box wide">
             <h4>Most valuable records</h4>
             <table class="leaderboard">
@@ -1798,6 +1878,18 @@
     });
 
     wireInsightClicks(insightsView);
+    const vgToggle = el('valueGenreModeToggle');
+    if(vgToggle) vgToggle.querySelectorAll('button').forEach(btn=> btn.addEventListener('click', ()=>{
+      valueGenreMode = btn.dataset.mode;
+      localStorage.setItem('cratespace:valueGenreMode', valueGenreMode);
+      renderInsightsView();
+    }));
+    const vdToggle = el('valueDecadeModeToggle');
+    if(vdToggle) vdToggle.querySelectorAll('button').forEach(btn=> btn.addEventListener('click', ()=>{
+      valueDecadeMode = btn.dataset.mode;
+      localStorage.setItem('cratespace:valueDecadeMode', valueDecadeMode);
+      renderInsightsView();
+    }));
     drawInsightCharts(s);
   }
 
@@ -1900,23 +1992,26 @@
     });
 
     if(s.priced){
-      const genreVals = Object.entries(s.valueByGenre).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      const genreSource = valueGenreMode === 'style' ? s.valueByStyle : s.valueByGenre;
+      const genreVals = Object.entries(genreSource).sort((a,b)=>b[1]-a[1]).slice(0,8);
       makeChart('chartValueGenre', {
         type:'bar',
         data:{ labels:genreVals.map(e=>e[0]), datasets:[{ data:genreVals.map(e=>Math.round(e[1])), backgroundColor:'#d8a51d' }] },
         options:{
-          indexAxis:'y', plugins:{legend:{display:false}},
-          onClick: chartClick('y', i => { const v = genreVals[i][0]; goToCrateWithFilter({ genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
+          indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          onClick: chartClick('y', i => { const v = genreVals[i][0]; goToCrateWithFilter(valueGenreMode==='style' ? { genre:v, genreModeValue:'style', label:`Style — ${v}` } : { genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
           onHover: chartHoverCursor('y')
         }
       });
-      const decVals = Object.entries(s.valueByDecade).sort((a,b)=>Number(a[0])-Number(b[0]));
+      const decSource = valueDecadeMode === 'year' ? s.valueByYear : s.valueByDecade;
+      const decVals = Object.entries(decSource).sort((a,b)=>Number(a[0])-Number(b[0]));
       makeChart('chartValueDecade', {
         type:'bar',
-        data:{ labels:decVals.map(e=>e[0]+'s'), datasets:[{ data:decVals.map(e=>Math.round(e[1])), backgroundColor:'#9a3324' }] },
+        data:{ labels:decVals.map(e=> valueDecadeMode==='year' ? e[0] : e[0]+'s'), datasets:[{ data:decVals.map(e=>Math.round(e[1])), backgroundColor:'#9a3324' }] },
         options:{
-          plugins:{legend:{display:false}},
-          onClick: chartClick('x', i => { const v = Number(decVals[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+          plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.y, s.chartCurrency)}}},
+          scales: valueDecadeMode==='year' ? { x:{ ticks:{maxTicksLimit:15} } } : {},
+          onClick: chartClick('x', i => { const v = Number(decVals[i][0]); valueDecadeMode==='year' ? goToCrateWithFilter({ decade:Math.floor(v/10)*10, label:`Year — ${v}` }) : goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
           onHover: chartHoverCursor('x')
         }
       });
@@ -2247,7 +2342,7 @@
   async function buildBackupPayload(){
     const username = usernameInput.value.trim() || localStorage.getItem('cratespace:lastUser') || '';
     return {
-      crateSpaceBackup: 1,
+      myCrateBackup: 1,
       exportedAt: new Date().toISOString(),
       username,
       collection: username ? await idbGet(collectionKey(username)) : null,
@@ -2262,7 +2357,7 @@
   }
 
   function isValidBackupPayload(payload){
-    return !!(payload && (payload.crateSpaceBackup === 1 || payload.deadwaxBackup === 1) && payload.username);
+    return !!(payload && (payload.myCrateBackup === 1 || payload.crateSpaceBackup === 1 || payload.deadwaxBackup === 1) && payload.username);
   }
 
   // Writes a backup payload's contents into localStorage. Returns
@@ -2368,7 +2463,7 @@
     const parsed = parseRepoInput();
     if(!parsed) throw new Error('Enter the repo as "github-username/repo-name".');
     const { owner, repo } = parsed;
-    const path = ghPath.value.trim() || 'cratespace-backup.json';
+    const path = ghPath.value.trim() || 'mycrate-backup.json';
     const api = `https://api.github.com/repos/${owner}/${repo}`;
 
     const payload = await buildBackupPayload();
@@ -2406,7 +2501,7 @@
       });
       const newCommit = await githubApiFetch(`${api}/git/commits`, {
         method:'POST',
-        body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, tree: tree.sha, parents:[refData.object.sha] })
+        body: JSON.stringify({ message:`MyCrate backup — ${new Date().toISOString()}`, tree: tree.sha, parents:[refData.object.sha] })
       });
       newCommitSha = newCommit.sha;
       onProgress && onProgress('Updating branch…');
@@ -2424,7 +2519,7 @@
       try{
         created = await githubApiFetch(`${api}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
           method:'PUT',
-          body: JSON.stringify({ message:`CrateSpace backup — ${new Date().toISOString()}`, content: contentB64 })
+          body: JSON.stringify({ message:`MyCrate backup — ${new Date().toISOString()}`, content: contentB64 })
         });
       }catch(err){
         throw new Error(`Couldn't create the first commit (${err.message}). A quick one-time fix: on GitHub, open the repo and click "Add a README file" (or add any file) to give it one initial commit, then try Push again — after that, pushes use a different path with no size limit.`);
@@ -2438,7 +2533,7 @@
     const parsed = parseRepoInput();
     if(!parsed) throw new Error('Enter the repo as "github-username/repo-name".');
     const { owner, repo } = parsed;
-    const path = ghPath.value.trim() || 'cratespace-backup.json';
+    const path = ghPath.value.trim() || 'mycrate-backup.json';
     const api = `https://api.github.com/repos/${owner}/${repo}`;
 
     onProgress && onProgress('Fetching backup…');
@@ -2497,7 +2592,7 @@
       }
       throw new Error(`The file in that repo doesn't look like valid JSON (${e.message}).${sizeNote}${context}`);
     }
-    if(!isValidBackupPayload(payload)) throw new Error("That file doesn't look like a valid CrateSpace backup.");
+    if(!isValidBackupPayload(payload)) throw new Error("That file doesn't look like a valid MyCrate backup.");
     return payload;
   }
 

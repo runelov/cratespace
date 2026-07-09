@@ -3,27 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>CrateSpace — a crate dug from Discogs</title>
+<title>MyCrate — a crate dug from Discogs</title>
 
 <!-- Lets iOS/iPadOS treat this as a standalone app when added to the Home Screen via Safari's Share menu -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CrateSpace">
+<meta name="apple-mobile-web-app-title" content="MyCrate">
 <meta name="theme-color" content="#16130f">
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
 
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=2026-07-07.34">
+<link rel="stylesheet" href="styles.css?v=2026-07-07.35">
 </head>
 <body>
 
 <header class="top">
   <div class="top-row">
     <div class="brand">
-      <h1>CRATE<span>SPACE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.34</span></small>
+      <h1>MY<span>CRATE</span></h1>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.35</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -42,13 +42,13 @@
     </div>
     <div class="sync-panel" style="margin-top:8px;">
       <input id="ghRepo" name="deadwax-github-repo" type="text" placeholder="github-username/repo" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:190px;">
-      <input id="ghPath" name="deadwax-github-path" type="text" placeholder="file path" value="cratespace-backup.json" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:150px;">
+      <input id="ghPath" name="deadwax-github-path" type="text" placeholder="file path" value="mycrate-backup.json" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="min-width:150px;">
       <input id="ghToken" name="deadwax-github-token" type="text" placeholder="github token" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <button class="btn ghost small" id="ghPushBtn" title="Upload everything cached in this browser to the GitHub repo above">⇪ Push to GitHub</button>
       <button class="btn ghost small" id="ghPullBtn" title="Load the backup from the GitHub repo above into this browser">⇩ Pull from GitHub</button>
     </div>
     <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
-    <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use CrateSpace on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
+    <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use MyCrate on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
   </div>
 
   <div class="nav-tabs" id="navTabs" style="display:none;">
@@ -165,10 +165,10 @@
 
 <div id="stateArea"></div>
 
-<footer>CrateSpace <span id="buildStamp">build 2026-07-07.34</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>MyCrate <span id="buildStamp">build 2026-07-07.35</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
-<script src="app.js?v=2026-07-07.34"></script>
+<script src="app.js?v=2026-07-07.35"></script>
 </body>
 </html>
