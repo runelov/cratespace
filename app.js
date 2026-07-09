@@ -319,7 +319,7 @@
     const bi = entry.basic_information || {};
     const artists = (bi.artists||[]).map(a=>({ id:a.id, name:(a.name||'').replace(/\s\(\d+\)$/,'') }));
     const labels = (bi.labels||[]).map(l=>({ id:l.id, name:(l.name||'').replace(/\s\(\d+\)$/,''), catno:l.catno }));
-    const formatDescriptions = (bi.formats||[]).flatMap(f=>f.descriptions||[]);
+    const formatDescriptions = [...new Set((bi.formats||[]).flatMap(f=>f.descriptions||[]))];
     return {
       id: entry.id,
       instance_id: entry.instance_id || null,
@@ -330,7 +330,7 @@
       cover: bi.cover_image || '',
       genres: bi.genres || [],
       styles: bi.styles || [],
-      formats: (bi.formats||[]).map(f=>f.name),
+      formats: [...new Set((bi.formats||[]).map(f=>f.name))],
       formatDescriptions,
       labels,
       catno: labels[0]?.catno || '',
@@ -739,7 +739,7 @@
     const items = activeItems();
     const formats = {}, decades = {}, genreMap = {};
     items.forEach(r=>{
-      r.formats.forEach(f => formats[f] = (formats[f]||0)+1);
+      [...new Set(r.formats)].forEach(f => formats[f] = (formats[f]||0)+1);
       if(r.year){ const d = Math.floor(r.year/10)*10; decades[d] = (decades[d]||0)+1; }
       let source = [];
       if(genreMode === 'genre') source = r.genres;
@@ -1199,6 +1199,7 @@
   // ---------- fill the gaps ----------
   const TARGET_FORMATS = ['LP','7"','12"','Box Set'];
   let gapMinOwned = 2;
+  let gapFormatsCollapsed = localStorage.getItem('cratespace:gapFormatsCollapsed') !== '0'; // collapsed by default
   let gapFormats = new Set(TARGET_FORMATS);
   let dealPassRunning = false, dealDone = 0, dealTotal = 0;
   let dealPassCancelled = false;
@@ -1297,8 +1298,11 @@
     const controlsHtml = `
       <div class="gaps-controls">
         <div class="ctrl">
-          <label>Focus formats</label>
-          <div class="format-checks" id="gapFormatChecks">
+          <label class="gap-format-label" id="gapFormatToggle" style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+            <span class="chev" style="display:inline-block; color:var(--mustard); font-size:9px; transition:transform .15s ease; ${gapFormatsCollapsed?'':'transform:rotate(90deg);'}">▸</span>
+            Focus formats (${gapFormats.size} of ${availableWantlistFormats().length} selected)
+          </label>
+          <div class="format-checks" id="gapFormatChecks" style="${gapFormatsCollapsed?'display:none;':''}">
             ${availableWantlistFormats().map(f=>`<label><input type="checkbox" value="${escapeHtml(f)}" ${gapFormats.has(f)?'checked':''}> ${escapeHtml(f)}</label>`).join('')}
           </div>
         </div>
@@ -1374,6 +1378,11 @@
       ${bestBuysHtml}
       ${groupsHtml}`;
 
+    el('gapFormatToggle').addEventListener('click', ()=>{
+      gapFormatsCollapsed = !gapFormatsCollapsed;
+      localStorage.setItem('cratespace:gapFormatsCollapsed', gapFormatsCollapsed ? '1' : '0');
+      renderGapsView();
+    });
     el('gapFormatChecks').querySelectorAll('input').forEach(cb=>{
       cb.addEventListener('change', ()=>{
         if(cb.checked) gapFormats.add(cb.value); else gapFormats.delete(cb.value);
@@ -1779,7 +1788,7 @@
         <div class="chart-grid">
           <div class="chart-box"><h4>Format mix</h4><canvas id="chartFormat"></canvas></div>
           <div class="chart-box"><h4>Top styles</h4><div class="chart-tall-wrap" id="chartStylesWrap"><canvas id="chartStyles"></canvas></div></div>
-          <div class="chart-box"><h4>By decade</h4><canvas id="chartDecades"></canvas></div>
+          <div class="chart-box"><h4>By decade</h4><div class="chart-tall-wrap" id="chartDecadesWrap"><canvas id="chartDecades"></canvas></div></div>
           <div class="chart-box"><h4>Top labels</h4><div class="chart-tall-wrap" id="chartLabelsWrap"><canvas id="chartLabels"></canvas></div></div>
           <div class="chart-box wide">
             <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
@@ -1807,7 +1816,7 @@
                 <button data-mode="style" class="${valueGenreMode==='style'?'active':''}">Style</button>
               </span>
             </h4>
-            <canvas id="chartValueGenre"></canvas>
+            <div class="chart-tall-wrap" id="chartValueGenreWrap"><canvas id="chartValueGenre"></canvas></div>
           </div>
           <div class="chart-box">
             <h4 style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
@@ -1817,7 +1826,7 @@
                 <button data-mode="year" class="${valueDecadeMode==='year'?'active':''}">Year</button>
               </span>
             </h4>
-            <canvas id="chartValueDecade"></canvas>
+            <div class="chart-tall-wrap" id="chartValueDecadeWrap"><canvas id="chartValueDecade"></canvas></div>
           </div>
           <div class="chart-box wide">
             <h4>Most valuable records</h4>
@@ -1957,13 +1966,15 @@
     });
 
     const decadeEntries = Object.entries(s.decadeMapAll).sort((a,b)=>Number(a[0])-Number(b[0]));
+    sizeTallWrap('chartDecadesWrap', decadeEntries.length);
     makeChart('chartDecades', {
       type:'bar',
       data:{ labels:decadeEntries.map(e=>e[0]+'s'), datasets:[{ data:decadeEntries.map(e=>e[1]), backgroundColor:'#9a3324' }] },
       options:{
-        plugins:{legend:{display:false}}, scales:{ y:{ ticks:{precision:0} } },
-        onClick: chartClick('x', i => { const v = Number(decadeEntries[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
-        onHover: chartHoverCursor('x')
+        indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+        scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+        onClick: chartClick('y', i => { const v = Number(decadeEntries[i][0]); goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+        onHover: chartHoverCursor('y')
       }
     });
 
@@ -1993,26 +2004,34 @@
 
     if(s.priced){
       const genreSource = valueGenreMode === 'style' ? s.valueByStyle : s.valueByGenre;
-      const genreVals = Object.entries(genreSource).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      const genreVals = Object.entries(genreSource).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      sizeTallWrap('chartValueGenreWrap', genreVals.length);
       makeChart('chartValueGenre', {
         type:'bar',
         data:{ labels:genreVals.map(e=>e[0]), datasets:[{ data:genreVals.map(e=>Math.round(e[1])), backgroundColor:'#d8a51d' }] },
         options:{
-          indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
           onClick: chartClick('y', i => { const v = genreVals[i][0]; goToCrateWithFilter(valueGenreMode==='style' ? { genre:v, genreModeValue:'style', label:`Style — ${v}` } : { genre:v, genreModeValue:'genre', label:`Genre — ${v}` }); }),
           onHover: chartHoverCursor('y')
         }
       });
-      const decSource = valueDecadeMode === 'year' ? s.valueByYear : s.valueByDecade;
-      const decVals = Object.entries(decSource).sort((a,b)=>Number(a[0])-Number(b[0]));
+      const decSourceEntries = Object.entries(valueDecadeMode==='year' ? s.valueByYear : s.valueByDecade);
+      // Year can have many more distinct values than decade — cap to the
+      // highest-value years so the chart doesn't grow unreasonably tall,
+      // same spirit as Top Styles/Labels capping at 10.
+      const decVals = (valueDecadeMode==='year'
+        ? decSourceEntries.sort((a,b)=>b[1]-a[1]).slice(0,20).sort((a,b)=>Number(a[0])-Number(b[0]))
+        : decSourceEntries.sort((a,b)=>Number(a[0])-Number(b[0])));
+      sizeTallWrap('chartValueDecadeWrap', decVals.length);
       makeChart('chartValueDecade', {
         type:'bar',
         data:{ labels:decVals.map(e=> valueDecadeMode==='year' ? e[0] : e[0]+'s'), datasets:[{ data:decVals.map(e=>Math.round(e[1])), backgroundColor:'#9a3324' }] },
         options:{
-          plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.y, s.chartCurrency)}}},
-          scales: valueDecadeMode==='year' ? { x:{ ticks:{maxTicksLimit:15} } } : {},
-          onClick: chartClick('x', i => { const v = Number(decVals[i][0]); valueDecadeMode==='year' ? goToCrateWithFilter({ decade:Math.floor(v/10)*10, label:`Year — ${v}` }) : goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
-          onHover: chartHoverCursor('x')
+          indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+          onClick: chartClick('y', i => { const v = Number(decVals[i][0]); valueDecadeMode==='year' ? goToCrateWithFilter({ decade:Math.floor(v/10)*10, label:`Year — ${v}` }) : goToCrateWithFilter({ decade:v, label:`Decade — ${v}s` }); }),
+          onHover: chartHoverCursor('y')
         }
       });
     }

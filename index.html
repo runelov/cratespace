@@ -15,7 +15,7 @@
 <link rel="icon" href="icon.png">
 
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
-<link rel="stylesheet" href="styles.css?v=2026-07-07.35">
+<link rel="stylesheet" href="styles.css?v=2026-07-07.36">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
   <div class="top-row">
     <div class="brand">
       <h1>MY<span>CRATE</span></h1>
-      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.35</span></small>
+      <small>a crate dug straight from Discogs · <span class="build-tag">build 2026-07-07.36</span></small>
     </div>
     <button class="setup-toggle" id="setupToggle">
       <span class="chev">▾</span> <span id="setupToggleLabel">Setup &amp; Sync</span>
@@ -49,22 +49,7 @@
     </div>
     <div class="sync-note" id="ghNote">Use a private repo just for this file. Your GitHub token stays in memory for this tab only — never saved — same as the Discogs token. Create a <b>fine-grained personal access token</b> scoped to only that one repo, with "Contents: Read and write" permission and nothing else, at github.com/settings/personal-access-tokens.</div>
     <div class="sync-note" id="syncNote">Your token stays in memory for this tab only — it is never saved. A token is also required to see value estimates (Discogs requires authentication for pricing data). "Sync" fetches only new items since last time; Discogs has no way to report removals, so use "Full resync" if you've deleted things there. To use MyCrate on another device without re-syncing, use "Push to GitHub" here and "Pull from GitHub" there.</div>
-  </div>
-
-  <div class="nav-tabs" id="navTabs" style="display:none;">
-    <button class="nav-tab active" id="tabCrate" data-dataset="crate">Crate <span class="n" id="crateCount">0</span></button>
-    <button class="nav-tab" id="tabWant" data-dataset="wantlist">Wantlist <span class="n" id="wantCount">0</span></button>
-    <button class="nav-tab" id="tabGaps">Gaps <span class="n" id="gapsCount">0</span></button>
-    <button class="nav-tab" id="tabInsights">Insights</button>
-  </div>
-</header>
-
-<div class="toolbar" id="toolbar">
-  <div class="value-bar" id="valueBar" style="display:none;">
-    <button class="value-bar-toggle" id="valueBarToggle">
-      <span class="chev">▾</span> Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span>
-    </button>
-    <div class="value-bar-controls" id="valueBarControls">
+    <div class="sync-panel" style="margin-top:8px;">
       <label class="assume-label" title="Show values converted to this currency. 'Auto' shows whatever currency your Discogs account itself returned, with no conversion.">
         Show in:
         <select id="displayCurrencySelect">
@@ -94,6 +79,23 @@
           <option value="Poor (P)">Poor (P)</option>
         </select>
       </label>
+    </div>
+  </div>
+
+  <div class="nav-tabs" id="navTabs" style="display:none;">
+    <button class="nav-tab active" id="tabCrate" data-dataset="crate">Crate <span class="n" id="crateCount">0</span></button>
+    <button class="nav-tab" id="tabWant" data-dataset="wantlist">Wantlist <span class="n" id="wantCount">0</span></button>
+    <button class="nav-tab" id="tabGaps">Gaps <span class="n" id="gapsCount">0</span></button>
+    <button class="nav-tab" id="tabInsights">Insights</button>
+  </div>
+</header>
+
+<div class="toolbar" id="toolbar">
+  <div class="value-bar" id="valueBar" style="display:none;">
+    <button class="value-bar-toggle" id="valueBarToggle">
+      <span class="chev">▾</span> Est. value: <b id="valueSum">—</b><span class="sub" id="valueCoverage">0 of 0 priced</span>
+    </button>
+    <div class="value-bar-controls" id="valueBarControls">
       <div class="progress" id="valueProgress"></div>
       <button class="btn small" id="valueBtn" title="Price only records that haven't been looked up yet">Estimate value</button>
       <button class="btn ghost small" id="valueRefreshBtn" title="Re-check the price of every record, even ones already priced">Refresh all</button>
@@ -165,10 +167,10 @@
 
 <div id="stateArea"></div>
 
-<footer>MyCrate <span id="buildStamp">build 2026-07-07.35</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
+<footer>MyCrate <span id="buildStamp">build 2026-07-07.36</span> · pulls live from the Discogs API · records rendered here belong to their respective owners on Discogs</footer>
 
 <div id="modalRoot"></div>
 
-<script src="app.js?v=2026-07-07.35"></script>
+<script src="app.js?v=2026-07-07.36"></script>
 </body>
 </html>
