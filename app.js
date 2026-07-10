@@ -7,9 +7,9 @@
   let filtered = [];
   let filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
   let genreMode = 'style';         // 'genre' | 'style' | 'both'
-  let valueGenreMode = localStorage.getItem('cratespace:valueGenreMode') || 'genre';
-  let valueDecadeMode = localStorage.getItem('cratespace:valueDecadeMode') || 'decade';
-  let viewMode = localStorage.getItem('cratespace:viewMode') || (matchMedia('(max-width:760px)').matches ? 'compact' : 'large');
+  let valueGenreMode = localStorage.getItem('mycrate:valueGenreMode') || 'genre';
+  let valueDecadeMode = localStorage.getItem('mycrate:valueDecadeMode') || 'decade';
+  let viewMode = localStorage.getItem('mycrate:viewMode') || (matchMedia('(max-width:760px)').matches ? 'compact' : 'large');
   let searchTerm = "";
   let activeDataset = 'crate';     // 'crate' | 'wantlist'
   let currentView = { type:'browse' };
@@ -89,7 +89,7 @@
   // the two essential, potentially-large datasets — live here rather than
   // in localStorage. Everything else (prices, bios, preferences) stays in
   // localStorage since it's smaller and the synchronous access is convenient.
-  const IDB_NAME = 'cratespace-db';
+  const IDB_NAME = 'mycrate-db';
   const IDB_STORE = 'kv';
   let idbPromise = null;
   function openIdb(){
@@ -136,8 +136,8 @@
   }
 
   // ---------- persistence ----------
-  function collectionKey(u){ return `cratespace:collection:${u.toLowerCase()}`; }
-  function wantlistKey(u){ return `cratespace:wantlist:${u.toLowerCase()}`; }
+  function collectionKey(u){ return `mycrate:collection:${u.toLowerCase()}`; }
+  function wantlistKey(u){ return `mycrate:wantlist:${u.toLowerCase()}`; }
 
   function loadJSON(key){
     try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
@@ -148,12 +148,12 @@
   }
 
   async function loadAllCaches(){
-    priceCache = (await idbGet('cratespace:prices')) || {};
-    artistCache = (await idbGet('cratespace:artists')) || {};
-    labelCache = (await idbGet('cratespace:labels')) || {};
-    marketCache = (await idbGet('cratespace:market')) || {};
-    enrichCache = (await idbGet('cratespace:enrich')) || {};
-    const savedCondition = loadJSON('cratespace:assumedCondition');
+    priceCache = (await idbGet('mycrate:prices')) || {};
+    artistCache = (await idbGet('mycrate:artists')) || {};
+    labelCache = (await idbGet('mycrate:labels')) || {};
+    marketCache = (await idbGet('mycrate:market')) || {};
+    enrichCache = (await idbGet('mycrate:enrich')) || {};
+    const savedCondition = loadJSON('mycrate:assumedCondition');
     if(savedCondition) assumedConditionSelect.value = savedCondition;
     displayCurrencySelect.value = displayCurrency;
     ensureFxRates().then(()=>{
@@ -165,11 +165,11 @@
       else if(currentView.type === 'artist' || currentView.type === 'label') refreshAfterMutation();
     });
   }
-  async function savePriceCache(){ await idbSet('cratespace:prices', priceCache); }
-  async function saveMarketCache(){ await idbSet('cratespace:market', marketCache); }
-  async function saveEnrichCache(){ await idbSet('cratespace:enrich', enrichCache); }
-  async function saveArtistCache(){ await idbSet('cratespace:artists', artistCache); }
-  async function saveLabelCache(){ await idbSet('cratespace:labels', labelCache); }
+  async function savePriceCache(){ await idbSet('mycrate:prices', priceCache); }
+  async function saveMarketCache(){ await idbSet('mycrate:market', marketCache); }
+  async function saveEnrichCache(){ await idbSet('mycrate:enrich', enrichCache); }
+  async function saveArtistCache(){ await idbSet('mycrate:artists', artistCache); }
+  async function saveLabelCache(){ await idbSet('mycrate:labels', labelCache); }
 
   function fmtDate(iso){
     const d = new Date(iso);
@@ -186,11 +186,11 @@
   // account uses — that's the "auto" mode below, and needs no conversion.
   // Anything else is converted using ECB reference rates (via the free,
   // keyless Frankfurter API), cached locally for a day at a time.
-  let displayCurrency = localStorage.getItem('cratespace:displayCurrency') || 'NOK';
+  let displayCurrency = localStorage.getItem('mycrate:displayCurrency') || 'NOK';
   let fxRates = null;
   async function ensureFxRates(){
     const dayMs = 24*60*60*1000;
-    const cached = loadJSON('cratespace:fxRates');
+    const cached = loadJSON('mycrate:fxRates');
     if(cached && cached.rates && (Date.now() - cached.fetchedAt < dayMs)){
       fxRates = cached;
       return;
@@ -212,7 +212,7 @@
         const rates = { EUR: 1 };
         Object.keys(raw).forEach(k => { rates[k.toUpperCase()] = raw[k]; });
         fxRates = { rates, fetchedAt: Date.now() };
-        saveJSON('cratespace:fxRates', fxRates);
+        saveJSON('mycrate:fxRates', fxRates);
         return;
       }catch(e){ /* try next mirror */ }
     }
@@ -805,7 +805,7 @@
   viewModeToggle.querySelectorAll('button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       viewMode = btn.dataset.mode;
-      localStorage.setItem('cratespace:viewMode', viewMode);
+      localStorage.setItem('mycrate:viewMode', viewMode);
       updateViewModeButtons();
       if(currentView.type === 'browse') render();
       else if(currentView.type === 'gaps') renderGapsView();
@@ -1203,7 +1203,7 @@
   // ---------- fill the gaps ----------
   const TARGET_FORMATS = ['LP','7"','12"','Box Set'];
   let gapMinOwned = 2;
-  let gapFormatsCollapsed = localStorage.getItem('cratespace:gapFormatsCollapsed') !== '0'; // collapsed by default
+  let gapFormatsCollapsed = localStorage.getItem('mycrate:gapFormatsCollapsed') !== '0'; // collapsed by default
   let gapFormats = new Set(TARGET_FORMATS);
   let dealPassRunning = false, dealDone = 0, dealTotal = 0;
   let dealPassCancelled = false;
@@ -1384,7 +1384,7 @@
 
     el('gapFormatToggle').addEventListener('click', ()=>{
       gapFormatsCollapsed = !gapFormatsCollapsed;
-      localStorage.setItem('cratespace:gapFormatsCollapsed', gapFormatsCollapsed ? '1' : '0');
+      localStorage.setItem('mycrate:gapFormatsCollapsed', gapFormatsCollapsed ? '1' : '0');
       renderGapsView();
     });
     el('gapFormatChecks').querySelectorAll('input').forEach(cb=>{
@@ -1469,7 +1469,7 @@
   }
 
   // ---------- insights ----------
-  let timelineCutoff = localStorage.getItem('cratespace:timelineCutoff') || null;
+  let timelineCutoff = localStorage.getItem('mycrate:timelineCutoff') || null;
   function monthsBetween(d1, d2){
     const a = new Date(d1), b = new Date(d2);
     return (b.getFullYear()-a.getFullYear())*12 + (b.getMonth()-a.getMonth());
@@ -1879,14 +1879,14 @@
     el('enrichRefreshBtn').addEventListener('click', ()=> runEnrichPass(true));
     el('timelineCutoffInput').addEventListener('change', (e)=>{
       timelineCutoff = e.target.value || null;
-      if(timelineCutoff) localStorage.setItem('cratespace:timelineCutoff', timelineCutoff);
-      else localStorage.removeItem('cratespace:timelineCutoff');
+      if(timelineCutoff) localStorage.setItem('mycrate:timelineCutoff', timelineCutoff);
+      else localStorage.removeItem('mycrate:timelineCutoff');
       renderInsightsView();
     });
     const cutoffClearBtn = el('timelineCutoffClear');
     if(cutoffClearBtn) cutoffClearBtn.addEventListener('click', ()=>{
       timelineCutoff = null;
-      localStorage.removeItem('cratespace:timelineCutoff');
+      localStorage.removeItem('mycrate:timelineCutoff');
       renderInsightsView();
     });
 
@@ -1894,13 +1894,13 @@
     const vgToggle = el('valueGenreModeToggle');
     if(vgToggle) vgToggle.querySelectorAll('button').forEach(btn=> btn.addEventListener('click', ()=>{
       valueGenreMode = btn.dataset.mode;
-      localStorage.setItem('cratespace:valueGenreMode', valueGenreMode);
+      localStorage.setItem('mycrate:valueGenreMode', valueGenreMode);
       renderInsightsView();
     }));
     const vdToggle = el('valueDecadeModeToggle');
     if(vdToggle) vdToggle.querySelectorAll('button').forEach(btn=> btn.addEventListener('click', ()=>{
       valueDecadeMode = btn.dataset.mode;
-      localStorage.setItem('cratespace:valueDecadeMode', valueDecadeMode);
+      localStorage.setItem('mycrate:valueDecadeMode', valueDecadeMode);
       renderInsightsView();
     }));
     drawInsightCharts(s);
@@ -2166,14 +2166,14 @@
   valueBtn.addEventListener('click', ()=> runValuePass(false));
   valueRefreshBtn.addEventListener('click', ()=> runValuePass(true));
   assumedConditionSelect.addEventListener('change', ()=>{
-    saveJSON('cratespace:assumedCondition', assumedConditionSelect.value);
+    saveJSON('mycrate:assumedCondition', assumedConditionSelect.value);
     updateValueBar();
     render();
   });
 
   displayCurrencySelect.addEventListener('change', ()=>{
     displayCurrency = displayCurrencySelect.value;
-    localStorage.setItem('cratespace:displayCurrency', displayCurrency);
+    localStorage.setItem('mycrate:displayCurrency', displayCurrency);
     updateValueBar();
     if(currentView.type === 'browse') render();
     else if(currentView.type === 'gaps') renderGapsView();
@@ -2185,7 +2185,7 @@
   function setSetupCollapsed(collapsed, persist){
     setupPanel.classList.toggle('collapsed', collapsed);
     setupToggle.classList.toggle('collapsed', collapsed);
-    if(persist) localStorage.setItem('cratespace:setupCollapsed', collapsed ? '1' : '0');
+    if(persist) localStorage.setItem('mycrate:setupCollapsed', collapsed ? '1' : '0');
   }
   function updateSetupToggleLabel(){
     setupToggleLabel.textContent = collection.length
@@ -2268,7 +2268,7 @@
       const merged = full ? newItems : newItems.concat(existingItems);
       collection = merged;
       await idbSet(collectionKey(username), { syncedAt: new Date().toISOString(), items: merged });
-      localStorage.setItem('cratespace:lastUser', username);
+      localStorage.setItem('mycrate:lastUser', username);
       clearState();
       layout.style.display = 'flex';
       searchRow.style.display = 'flex';
@@ -2281,7 +2281,7 @@
       searchInput.value = ''; searchTerm = '';
       switchDataset('crate');
       refreshNav(); buildTabs(); updateValueBar(); render();
-      if(localStorage.getItem('cratespace:setupCollapsed') === null) setSetupCollapsed(true, false);
+      if(localStorage.getItem('mycrate:setupCollapsed') === null) setSetupCollapsed(true, false);
     }catch(err){
       showState(`<h2>Couldn't sync the crate</h2><p>${escapeHtml(err.message)}</p>`);
     }finally{
@@ -2321,7 +2321,7 @@
       const merged = full ? newItems : newItems.concat(existingItems);
       wantlist = merged;
       await idbSet(wantlistKey(username), { syncedAt: new Date().toISOString(), items: merged });
-      localStorage.setItem('cratespace:lastUser', username);
+      localStorage.setItem('mycrate:lastUser', username);
       syncNote.innerHTML = full
         ? `Wantlist rebuilt · <b>${merged.length}</b> items loaded and cached.`
         : (newItems.length
@@ -2346,24 +2346,24 @@
       await idbDelete(collectionKey(username));
       await idbDelete(wantlistKey(username));
     }
-    await idbDelete('cratespace:prices');
-    await idbDelete('cratespace:artists');
-    await idbDelete('cratespace:labels');
-    await idbDelete('cratespace:market');
-    await idbDelete('cratespace:enrich');
+    await idbDelete('mycrate:prices');
+    await idbDelete('mycrate:artists');
+    await idbDelete('mycrate:labels');
+    await idbDelete('mycrate:market');
+    await idbDelete('mycrate:enrich');
     // Clean up any leftovers from before these moved to IndexedDB.
-    localStorage.removeItem('cratespace:prices');
-    localStorage.removeItem('cratespace:artists');
-    localStorage.removeItem('cratespace:labels');
-    localStorage.removeItem('cratespace:market');
-    localStorage.removeItem('cratespace:enrich');
+    localStorage.removeItem('mycrate:prices');
+    localStorage.removeItem('mycrate:artists');
+    localStorage.removeItem('mycrate:labels');
+    localStorage.removeItem('mycrate:market');
+    localStorage.removeItem('mycrate:enrich');
     collection = []; wantlist = []; priceCache = {}; artistCache = {}; labelCache = {}; marketCache = {}; enrichCache = {};
     refreshNav();
     showState(`<h2>Cache cleared</h2><p>Enter your token (if needed) and sync again to reload your crate.</p>`);
   });
 
   async function buildBackupPayload(){
-    const username = usernameInput.value.trim() || localStorage.getItem('cratespace:lastUser') || '';
+    const username = usernameInput.value.trim() || localStorage.getItem('mycrate:lastUser') || '';
     return {
       myCrateBackup: 1,
       exportedAt: new Date().toISOString(),
@@ -2395,21 +2395,21 @@
     // ceiling (unlike localStorage, which is especially tight on iOS Safari
     // and was the actual cause of "value data" failing to save before).
     // Clean up any leftover localStorage copies from before this moved.
-    localStorage.removeItem('cratespace:prices');
-    localStorage.removeItem('cratespace:market');
-    localStorage.removeItem('cratespace:artists');
-    localStorage.removeItem('cratespace:labels');
-    localStorage.removeItem('cratespace:enrich');
+    localStorage.removeItem('mycrate:prices');
+    localStorage.removeItem('mycrate:market');
+    localStorage.removeItem('mycrate:artists');
+    localStorage.removeItem('mycrate:labels');
+    localStorage.removeItem('mycrate:enrich');
 
     if(payload.collection && !(await idbSetSafe(collectionKey(payload.username), payload.collection))) failures.push('crate');
     if(payload.wantlist && !(await idbSetSafe(wantlistKey(payload.username), payload.wantlist))) failures.push('wantlist');
-    if(!(await idbSetSafe('cratespace:prices', payload.prices || {}))) failures.push('value data');
-    if(!(await idbSetSafe('cratespace:market', payload.market || {}))) failures.push('deal-check data');
-    if(!(await idbSetSafe('cratespace:artists', payload.artists || {}))) failures.push('artist bios');
-    if(!(await idbSetSafe('cratespace:labels', payload.labels || {}))) failures.push('label bios');
-    if(!(await idbSetSafe('cratespace:enrich', payload.enrich || {}))) failures.push('enrichment data (playtime/credits/country)');
-    if(payload.assumedCondition) saveJSON('cratespace:assumedCondition', payload.assumedCondition);
-    localStorage.setItem('cratespace:lastUser', payload.username);
+    if(!(await idbSetSafe('mycrate:prices', payload.prices || {}))) failures.push('value data');
+    if(!(await idbSetSafe('mycrate:market', payload.market || {}))) failures.push('deal-check data');
+    if(!(await idbSetSafe('mycrate:artists', payload.artists || {}))) failures.push('artist bios');
+    if(!(await idbSetSafe('mycrate:labels', payload.labels || {}))) failures.push('label bios');
+    if(!(await idbSetSafe('mycrate:enrich', payload.enrich || {}))) failures.push('enrichment data (playtime/credits/country)');
+    if(payload.assumedCondition) saveJSON('mycrate:assumedCondition', payload.assumedCondition);
+    localStorage.setItem('mycrate:lastUser', payload.username);
     return { failures, crateCount, wantCount };
   }
 
@@ -2620,8 +2620,8 @@
   }
 
   function rememberGhFields(){
-    localStorage.setItem('cratespace:ghRepo', ghRepo.value.trim());
-    localStorage.setItem('cratespace:ghPath', ghPath.value.trim());
+    localStorage.setItem('mycrate:ghRepo', ghRepo.value.trim());
+    localStorage.setItem('mycrate:ghPath', ghPath.value.trim());
   }
   ghRepo.addEventListener('change', rememberGhFields);
   ghPath.addEventListener('change', rememberGhFields);
@@ -2709,14 +2709,14 @@
   // ---------- boot ----------
   (async function init(){
     await loadAllCaches();
-    const savedCollapsed = localStorage.getItem('cratespace:setupCollapsed');
+    const savedCollapsed = localStorage.getItem('mycrate:setupCollapsed');
     const hasExplicitPreference = savedCollapsed !== null;
     if(hasExplicitPreference) setSetupCollapsed(savedCollapsed === '1', false);
-    const lastGhRepo = localStorage.getItem('cratespace:ghRepo');
-    const lastGhPath = localStorage.getItem('cratespace:ghPath');
+    const lastGhRepo = localStorage.getItem('mycrate:ghRepo');
+    const lastGhPath = localStorage.getItem('mycrate:ghPath');
     if(lastGhRepo) ghRepo.value = lastGhRepo;
     if(lastGhPath) ghPath.value = lastGhPath;
-    const lastUser = localStorage.getItem('cratespace:lastUser');
+    const lastUser = localStorage.getItem('mycrate:lastUser');
     if(lastUser){
       usernameInput.value = lastUser;
       const cachedWant = await idbGet(wantlistKey(lastUser));
