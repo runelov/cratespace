@@ -1066,14 +1066,15 @@
     render();
   }
 
-  // Every clickable piece of metadata in Insights routes through here — always
-  // lands on the Crate (collection) view, since Insights is scoped to your
-  // collection, not the wantlist.
+  // Every clickable piece of metadata in Insights routes through here — lands
+  // on the Crate (collection) view by default, or the Wantlist view when
+  // opts.dataset === 'wantlist' (used by wantlist-sourced Insights data).
   function goToCrateWithFilter(opts){
     opts = opts || {};
-    activeDataset = 'crate';
-    tabCrate.classList.add('active');
-    tabWant.classList.remove('active');
+    const toWant = opts.dataset === 'wantlist';
+    activeDataset = toWant ? 'wantlist' : 'crate';
+    tabCrate.classList.toggle('active', !toWant);
+    tabWant.classList.toggle('active', toWant);
     filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
     searchTerm = ''; searchInput.value = '';
     if(opts.genreModeValue){
@@ -1552,7 +1553,7 @@
     });
     valuedItems.sort((a,b)=>b.amount-a.amount);
     const topValuable = valuedItems.slice(0,10);
-    const valueByGenre = {}, valueByStyle = {}, valueByDecade = {}, valueByYear = {};
+    const valueByGenre = {}, valueByStyle = {}, valueByDecade = {}, valueByYear = {}, valueByLabel = {}, valueByArtist = {};
     valuedItems.forEach(({r,amount,currency:itemCcy})=>{
       // Convert to the user's chosen display currency here, at aggregation time —
       // otherwise these charts silently mix currencies (or show the wrong one
@@ -1566,6 +1567,16 @@
         valueByDecade[d] = (valueByDecade[d]||0)+converted;
         valueByYear[r.year] = (valueByYear[r.year]||0)+converted;
       }
+      r.labels.forEach(l=>{
+        if(!l.id) return;
+        const name = stripSuffix(l.name);
+        valueByLabel[name] = (valueByLabel[name]||0)+converted;
+      });
+      r.artists.forEach(a=>{
+        if(!a.id || isVariousArtist(a)) return;
+        const name = stripSuffix(a.name);
+        valueByArtist[name] = (valueByArtist[name]||0)+converted;
+      });
     });
 
     let enrichedCount=0, totalDurationSec=0;
@@ -1617,6 +1628,18 @@
     }
     const topRarityGems = rarityCandidates.sort((a,b)=> b.ratio - a.ratio).slice(0,10);
 
+    let enrichedWantCount = 0;
+    const wantRarityCandidates = [];
+    wantlist.forEach(r=>{
+      const e = enrichCache[r.id];
+      if(!e) return;
+      enrichedWantCount++;
+      if(typeof e.communityHave === 'number' && typeof e.communityWant === 'number' && e.communityWant > 0){
+        wantRarityCandidates.push({ r, have:e.communityHave, want:e.communityWant, ratio: e.communityWant / (e.communityHave + 1) });
+      }
+    });
+    const topWantRarityGems = wantRarityCandidates.sort((a,b)=> b.ratio - a.ratio).slice(0,10);
+
     return {
       total: collection.length,
       artistCount: artistMap.size,
@@ -1627,29 +1650,31 @@
       firstAdded, lastAdded, avgPerMonth, addedByMonth,
       genreMapAll: genreMap, styleMapAll: styleMap, decadeMapAll: decadeMap,
       topStylesList: Object.entries(styleMap).sort((a,b)=>b[1]-a[1]).slice(0,10),
-      priced, valueSum, currency, chartCurrency: (displayCurrency === 'auto' ? currency : displayCurrency), topValuable, valueByGenre, valueByStyle, valueByDecade, valueByYear,
+      priced, valueSum, currency, chartCurrency: (displayCurrency === 'auto' ? currency : displayCurrency), topValuable, valueByGenre, valueByStyle, valueByDecade, valueByYear, valueByLabel, valueByArtist,
       enrichedCount, totalDurationSec, medianHave, medianWant, countryMap, topCredits, topRarityGems,
+      enrichedWantCount, topWantRarityGems,
       artistMapAll: artistMap, labelMapAll: labelMap, yearCounts
     };
   }
 
-  function ic(text, kind, value, label){
-    return `<span class="insight-clickable" data-ik="${kind}" data-iv="${escapeHtml(String(value))}"${label?` data-ilabel="${escapeHtml(label)}"`:''}>${text}</span>`;
+  function ic(text, kind, value, label, ds){
+    return `<span class="insight-clickable" data-ik="${kind}" data-iv="${escapeHtml(String(value))}"${label?` data-ilabel="${escapeHtml(label)}"`:''}${ds?` data-ids="${ds}"`:''}>${text}</span>`;
   }
   function wireInsightClicks(container){
     container.querySelectorAll('.insight-clickable').forEach(node=>{
       node.addEventListener('click', ()=>{
         const kind = node.dataset.ik, value = node.dataset.iv, label = node.dataset.ilabel || value;
+        const dataset = node.dataset.ids === 'wantlist' ? 'wantlist' : undefined;
         switch(kind){
-          case 'artist': goToCrateWithFilter({ search:value, label:`Artist — ${value}` }); break;
-          case 'label': goToCrateWithFilter({ search:value, label:`Label — ${value}` }); break;
-          case 'genre': goToCrateWithFilter({ genre:value, genreModeValue:'genre', label:`Genre — ${value}` }); break;
-          case 'style': goToCrateWithFilter({ genre:value, genreModeValue:'style', label:`Style — ${value}` }); break;
-          case 'decade': goToCrateWithFilter({ decade:Number(value), label:`Decade — ${value}s` }); break;
-          case 'title': goToCrateWithFilter({ search:value, label:`Title — ${value}` }); break;
-          case 'formatDesc': goToCrateWithFilter({ formatDesc:value, label:`Format — ${value}` }); break;
-          case 'country': goToCrateWithFilter({ country:value, label:`Pressing country — ${value}` }); break;
-          case 'credit': goToCrateWithFilter({ creditId:Number(value), label:`Credit — ${label} (id ${value})` }); break;
+          case 'artist': goToCrateWithFilter({ search:value, label:`Artist — ${value}`, dataset }); break;
+          case 'label': goToCrateWithFilter({ search:value, label:`Label — ${value}`, dataset }); break;
+          case 'genre': goToCrateWithFilter({ genre:value, genreModeValue:'genre', label:`Genre — ${value}`, dataset }); break;
+          case 'style': goToCrateWithFilter({ genre:value, genreModeValue:'style', label:`Style — ${value}`, dataset }); break;
+          case 'decade': goToCrateWithFilter({ decade:Number(value), label:`Decade — ${value}s`, dataset }); break;
+          case 'title': goToCrateWithFilter({ search:value, label:`Title — ${value}`, dataset }); break;
+          case 'formatDesc': goToCrateWithFilter({ formatDesc:value, label:`Format — ${value}`, dataset }); break;
+          case 'country': goToCrateWithFilter({ country:value, label:`Pressing country — ${value}`, dataset }); break;
+          case 'credit': goToCrateWithFilter({ creditId:Number(value), label:`Credit — ${label} (id ${value})`, dataset }); break;
         }
       });
     });
@@ -1760,8 +1785,9 @@
       { lab:'Artists', val:s.artistCount },
       { lab:'Labels', val:s.labelCount },
       { lab:'Top artist', val:s.topArtist?s.topArtist.name:'—', sub:s.topArtist?`${s.topArtist.count} releases`:'', click:s.topArtist?{ik:'artist', iv:s.topArtist.name}:null },
+      { lab:'Top label', val:s.topLabel?s.topLabel.name:'—', sub:s.topLabel?`${s.topLabel.count} releases`:'', click:s.topLabel?{ik:'label', iv:s.topLabel.name}:null },
       { lab:'Top decade', val:s.topDecade?`${s.topDecade[0]}s`:'—', sub:s.topDecade?`${s.topDecade[1]} records`:'', click:s.topDecade?{ik:'decade', iv:s.topDecade[0]}:null },
-      { lab:'Top genre', val:s.topGenre?s.topGenre[0]:'—', click:s.topGenre?{ik:'genre', iv:s.topGenre[0]}:null },
+      { lab:'Top style', val:s.topStyle?s.topStyle[0]:'—', click:s.topStyle?{ik:'style', iv:s.topStyle[0]}:null },
       { lab:'Oldest pressing', val:s.oldest?s.oldest.year:'—', click:s.oldest?{ik:'decade', iv:Math.floor(s.oldest.year/10)*10}:null },
       { lab:'Newest addition', val:s.newest?s.newest.year:'—', click:s.newest?{ik:'decade', iv:Math.floor(s.newest.year/10)*10}:null }
     ];
@@ -1832,6 +1858,14 @@
             </h4>
             <div class="chart-tall-wrap" id="chartValueDecadeWrap"><canvas id="chartValueDecade"></canvas></div>
           </div>
+          <div class="chart-box">
+            <h4>Value by label</h4>
+            <div class="chart-tall-wrap" id="chartValueLabelWrap"><canvas id="chartValueLabel"></canvas></div>
+          </div>
+          <div class="chart-box">
+            <h4>Value by artist</h4>
+            <div class="chart-tall-wrap" id="chartValueArtistWrap"><canvas id="chartValueArtist"></canvas></div>
+          </div>
           <div class="chart-box wide">
             <h4>Most valuable records</h4>
             <table class="leaderboard">
@@ -1855,7 +1889,7 @@
             </table>
           </div>` : ''}
           ${s.topRarityGems.length ? `<div class="chart-box wide">
-            <h4>Hardest to find, most wanted</h4>
+            <h4>Rarest/most wanted in your collection</h4>
             <p class="value-note" style="margin:-4px 0 12px;">Ranked by want ÷ (have + 1) among the ${s.enrichedCount} records checked so far — high want count, low number of other owners on Discogs.</p>
             <table class="leaderboard">
               <thead><tr><th>Record</th><th style="text-align:right;">Have</th><th style="text-align:right;">Want</th><th style="text-align:right;">Ratio</th></tr></thead>
@@ -1863,6 +1897,28 @@
             </table>
           </div>` : ''}
         </div>
+      </div>` : '';
+
+    const wantRaritySection = wantlist.length ? `
+      <div class="insight-section">
+        <h3>Rarest/most wanted in your wantlist</h3>
+        <div class="enrich-panel">
+          <div class="txt">Check full details for your wantlist (one Discogs request per record, cached afterward — same as collection enrichment above) to rank items by want ÷ have, for records you don't own yet.</div>
+          <div class="progress" id="enrichWantProgress">${enrichWantPassRunning ? `Checking record ${enrichWantDone} of ${enrichWantTotal}…` : ''}</div>
+          <button class="btn small${enrichWantPassRunning ? ' running' : ''}" id="enrichWantBtn">${enrichWantPassRunning ? `⏹ Stop (${enrichWantDone} of ${enrichWantTotal})` : 'Enrich my wantlist'}</button>
+          <button class="btn ghost small" id="enrichWantRefreshBtn">Refresh all</button>
+        </div>
+        ${s.topWantRarityGems.length ? `
+        <div class="chart-grid" style="margin-top:14px;">
+          <div class="chart-box wide">
+            <h4>Rarest/most wanted in your wantlist</h4>
+            <p class="value-note" style="margin:-4px 0 12px;">Ranked by want ÷ (have + 1) among the ${s.enrichedWantCount} wantlist record${s.enrichedWantCount===1?'':'s'} checked so far.</p>
+            <table class="leaderboard">
+              <thead><tr><th>Record</th><th style="text-align:right;">Have</th><th style="text-align:right;">Want</th><th style="text-align:right;">Ratio</th></tr></thead>
+              <tbody>${s.topWantRarityGems.map(g=>`<tr><td>${ic(escapeHtml(g.r.title),'title',g.r.title,null,'wantlist')} <span style="color:var(--line);">— ${ic(escapeHtml(cleanArtistDisplay(g.r)),'artist',cleanArtistDisplay(g.r),null,'wantlist')}</span></td><td class="num">${g.have}</td><td class="num">${g.want}</td><td class="num">${g.ratio.toFixed(1)}</td></tr>`).join('')}</tbody>
+            </table>
+          </div>
+        </div>` : ''}
       </div>` : '';
 
     insightsView.innerHTML = `
@@ -1873,10 +1929,15 @@
       ${chartsHtml}
       ${valueSection}
       ${enrichedSection}
+      ${wantRaritySection}
     `;
 
     el('enrichBtn').addEventListener('click', ()=> runEnrichPass(false));
     el('enrichRefreshBtn').addEventListener('click', ()=> runEnrichPass(true));
+    if(el('enrichWantBtn')){
+      el('enrichWantBtn').addEventListener('click', ()=> runEnrichWantPass(false));
+      el('enrichWantRefreshBtn').addEventListener('click', ()=> runEnrichWantPass(true));
+    }
     el('timelineCutoffInput').addEventListener('change', (e)=>{
       timelineCutoff = e.target.value || null;
       if(timelineCutoff) localStorage.setItem('mycrate:timelineCutoff', timelineCutoff);
@@ -2038,6 +2099,30 @@
           onHover: chartHoverCursor('y')
         }
       });
+      const labelVals = Object.entries(s.valueByLabel).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      sizeTallWrap('chartValueLabelWrap', labelVals.length);
+      makeChart('chartValueLabel', {
+        type:'bar',
+        data:{ labels:labelVals.map(e=>e[0]), datasets:[{ data:labelVals.map(e=>Math.round(e[1])), backgroundColor:'#49603f' }] },
+        options:{
+          indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+          onClick: chartClick('y', i => { const v = labelVals[i][0]; goToCrateWithFilter({ search:v, label:`Label — ${v}` }); }),
+          onHover: chartHoverCursor('y')
+        }
+      });
+      const artistVals = Object.entries(s.valueByArtist).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      sizeTallWrap('chartValueArtistWrap', artistVals.length);
+      makeChart('chartValueArtist', {
+        type:'bar',
+        data:{ labels:artistVals.map(e=>e[0]), datasets:[{ data:artistVals.map(e=>Math.round(e[1])), backgroundColor:'#c98b3a' }] },
+        options:{
+          indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>fmtMoney(ctx.parsed.x, s.chartCurrency)}}},
+          scales:{ x:{ ticks:{precision:0} }, y:{ ticks:{autoSkip:false} } },
+          onClick: chartClick('y', i => { const v = artistVals[i][0]; goToCrateWithFilter({ search:v, label:`Artist — ${v}` }); }),
+          onHover: chartHoverCursor('y')
+        }
+      });
     }
 
     if(Object.keys(s.countryMap).length){
@@ -2096,6 +2181,48 @@
       btn.classList.toggle('running', enrichPassRunning);
     }
     if(p && enrichPassRunning) p.textContent = `Checking record ${enrichDone} of ${enrichTotal}…`;
+  }
+
+  let enrichWantPassRunning = false, enrichWantPassCancelled = false, enrichWantDone = 0, enrichWantTotal = 0;
+  async function runEnrichWantPass(force){
+    if(enrichWantPassRunning){ enrichWantPassCancelled = true; return; }
+    if(!currentToken()){
+      const p = el('enrichWantProgress');
+      if(p) p.textContent = 'Add a personal access token above first.';
+      return;
+    }
+    const items = force ? wantlist : wantlist.filter(r => !enrichCache[r.id]);
+    if(force){
+      const ok = await showConfirm(`This re-checks full details for all <b>${wantlist.length}</b> wantlist records, one Discogs request each.`, { title:'Refresh all wantlist enrichment data?', confirmLabel:'Refresh all' });
+      if(!ok) return;
+    }
+    enrichWantPassRunning = true; enrichWantPassCancelled = false;
+    enrichWantDone = 0; enrichWantTotal = items.length;
+    updateEnrichWantButton();
+    let erroredMessage = null;
+    for(const r of items){
+      if(enrichWantPassCancelled) break;
+      try{ await fetchEnrichment(r.id, force); }
+      catch(err){ erroredMessage = err.message; break; }
+      enrichWantDone++;
+      updateEnrichWantButton();
+      if(enrichWantDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
+    }
+    enrichWantPassRunning = false;
+    if(currentView.type === 'insights') renderInsightsView();
+    if(erroredMessage){
+      const p = el('enrichWantProgress');
+      if(p) p.textContent = `Stopped after an error (${enrichWantDone} checked first): ${erroredMessage}`;
+    }
+  }
+  function updateEnrichWantButton(){
+    const btn = el('enrichWantBtn');
+    const p = el('enrichWantProgress');
+    if(btn){
+      btn.textContent = enrichWantPassRunning ? `⏹ Stop (${enrichWantDone} of ${enrichWantTotal})` : 'Enrich my wantlist';
+      btn.classList.toggle('running', enrichWantPassRunning);
+    }
+    if(p && enrichWantPassRunning) p.textContent = `Checking record ${enrichWantDone} of ${enrichWantTotal}…`;
   }
 
   // ---------- value pass (opt-in background pricing) ----------
