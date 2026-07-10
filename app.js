@@ -1235,7 +1235,10 @@
         if(!lowestConverted) return;
         const savingsRatio = iv.amount / lowestConverted; // >1 = listed below estimated value
         if(savingsRatio <= 1.1) return; // require at least a genuine ~10% discount to bother surfacing it
-        candidates.push({ r, artistName: g.name, lowest: market.lowest, lowestCurrency: market.currency || 'USD', estAmount: iv.amount, estCurrency: iv.currency, savingsRatio, numForSale: market.numForSale });
+        const enrich = enrichCache[r.id];
+        const rarity = (enrich && typeof enrich.communityHave === 'number' && typeof enrich.communityWant === 'number' && enrich.communityWant > 0)
+          ? enrich.communityWant / (enrich.communityHave + 1) : null;
+        candidates.push({ r, artistName: g.name, lowest: market.lowest, lowestCurrency: market.currency || 'USD', estAmount: iv.amount, estCurrency: iv.currency, savingsRatio, numForSale: market.numForSale, rarity });
       });
     });
     return candidates.sort((a,b)=> b.savingsRatio - a.savingsRatio).slice(0,10);
@@ -1363,13 +1366,14 @@
     const bestBuysHtml = bestBuys.length ? `
       <div class="best-buys">
         <h3>Best buys right now</h3>
-        <p class="detail-bio" style="margin:0 0 14px;">Ranked by how far below estimated value the current lowest listing sits. Run "Check for deals" above to populate this — only records with both a market listing and an estimated value can show up here.</p>
+        <p class="detail-bio" style="margin:0 0 14px;">Ranked by how far below estimated value the current lowest listing sits. Run "Check for deals" above to populate this — only records with both a market listing and an estimated value can show up here. Where wantlist enrichment data is available (see Insights), rarity (want ÷ have) is shown too.</p>
         <div class="best-buys-grid">
           ${bestBuys.map(b=>`
             <div class="best-buy-item">
               <div class="gap-item">${sleeveCard(b.r, true)}</div>
               <div class="best-buy-note">
                 <span class="best-buy-savings">${Math.round((b.savingsRatio-1)*100)}% below est. value</span>
+                ${b.rarity!=null ? `<span class="best-buy-rarity">${b.rarity.toFixed(1)}x want/have</span>` : ''}
                 <span>Lowest: ${fmtMoney(b.lowest, b.lowestCurrency)} · Est: ${fmtMoneyDisplay(b.estAmount, b.estCurrency)} · ${b.numForSale} for sale</span>
               </div>
             </div>`).join('')}

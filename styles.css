@@ -447,6 +447,7 @@
   .best-buy-item{ display:flex; flex-direction:column; }
   .best-buy-note{ margin-top:8px; font-size:10.5px; color:var(--line); font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace; line-height:1.5; }
   .best-buy-savings{ display:block; color:var(--mustard); font-weight:600; font-size:11.5px; margin-bottom:2px; }
+  .best-buy-rarity{ display:block; color:var(--rust); font-weight:600; font-size:10.5px; margin-bottom:2px; }
   .gap-deal{
     margin-top:10px; font-size:11px; font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace; color:var(--line);
     border-top:1px dashed var(--line-soft); padding-top:8px;
