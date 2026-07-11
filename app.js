@@ -2171,6 +2171,7 @@
       if(enrichDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
     }
     enrichPassRunning = false;
+    updateSetupToggleLabel();
     if(currentView.type === 'insights') renderInsightsView();
     if(erroredMessage){
       const p = el('enrichProgress');
@@ -2185,6 +2186,7 @@
       btn.classList.toggle('running', enrichPassRunning);
     }
     if(p && enrichPassRunning) p.textContent = `Checking record ${enrichDone} of ${enrichTotal}…`;
+    updateSetupToggleLabel();
   }
 
   let enrichWantPassRunning = false, enrichWantPassCancelled = false, enrichWantDone = 0, enrichWantTotal = 0;
@@ -2213,6 +2215,7 @@
       if(enrichWantDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
     }
     enrichWantPassRunning = false;
+    updateSetupToggleLabel();
     if(currentView.type === 'insights') renderInsightsView();
     if(erroredMessage){
       const p = el('enrichWantProgress');
@@ -2227,6 +2230,28 @@
       btn.classList.toggle('running', enrichWantPassRunning);
     }
     if(p && enrichWantPassRunning) p.textContent = `Checking record ${enrichWantDone} of ${enrichWantTotal}…`;
+    updateSetupToggleLabel();
+  }
+
+  // Auto-enrichment after a sync: wraps runEnrichPass/runEnrichWantPass so a
+  // sync that lands while a pass is already running re-triggers it afterward
+  // instead of stopping it — calling runEnrichPass directly while it's running
+  // is the "stop" gesture used by the button, which isn't what we want here.
+  let autoEnrichCratePending = false;
+  async function autoEnrichCrate(){
+    if(!currentToken()) return;
+    if(enrichPassRunning){ autoEnrichCratePending = true; return; }
+    autoEnrichCratePending = false;
+    await runEnrichPass(false);
+    if(autoEnrichCratePending) autoEnrichCrate();
+  }
+  let autoEnrichWantPending = false;
+  async function autoEnrichWant(){
+    if(!currentToken()) return;
+    if(enrichWantPassRunning){ autoEnrichWantPending = true; return; }
+    autoEnrichWantPending = false;
+    await runEnrichWantPass(false);
+    if(autoEnrichWantPending) autoEnrichWant();
   }
 
   // ---------- value pass (opt-in background pricing) ----------
@@ -2319,9 +2344,12 @@
     if(persist) localStorage.setItem('mycrate:setupCollapsed', collapsed ? '1' : '0');
   }
   function updateSetupToggleLabel(){
-    setupToggleLabel.textContent = collection.length
+    let label = collection.length
       ? `Setup & Sync · ${collection.length} record${collection.length===1?'':'s'}`
       : 'Setup & Sync';
+    if(enrichPassRunning) label += ` · enriching crate ${enrichDone}/${enrichTotal}`;
+    if(enrichWantPassRunning) label += ` · enriching wantlist ${enrichWantDone}/${enrichWantTotal}`;
+    setupToggleLabel.textContent = label;
   }
   setupToggle.addEventListener('click', ()=>{
     setSetupCollapsed(!setupPanel.classList.contains('collapsed'), true);
@@ -2403,16 +2431,21 @@
       clearState();
       layout.style.display = 'flex';
       searchRow.style.display = 'flex';
-      syncNote.innerHTML = full
+      const newCount = newItems.filter(r => !enrichCache[r.id]).length;
+      const enrichNote = newCount
+        ? (currentToken() ? ` Enriching ${newCount} of them in the background — watch progress up in "Setup & Sync".` : ' Add a token above to auto-enrich new records.')
+        : '';
+      syncNote.innerHTML = (full
         ? `Full resync complete · <b>${merged.length}</b> records loaded and cached.`
         : (newItems.length
             ? `Synced just now · <b>${newItems.length}</b> new record${newItems.length===1?'':'s'} found (now <b>${merged.length}</b> total).`
-            : `No new records found · still <b>${merged.length}</b> total.`);
+            : `No new records found · still <b>${merged.length}</b> total.`)) + enrichNote;
       filters = { format:null, genre:null, decade:null, formatDesc:null, country:null, creditId:null };
       searchInput.value = ''; searchTerm = '';
       switchDataset('crate');
       refreshNav(); buildTabs(); updateValueBar(); render();
       if(localStorage.getItem('mycrate:setupCollapsed') === null) setSetupCollapsed(true, false);
+      if(newCount) autoEnrichCrate();
     }catch(err){
       showState(`<h2>Couldn't sync the crate</h2><p>${escapeHtml(err.message)}</p>`);
     }finally{
@@ -2453,12 +2486,17 @@
       wantlist = merged;
       await idbSet(wantlistKey(username), { syncedAt: new Date().toISOString(), items: merged });
       localStorage.setItem('mycrate:lastUser', username);
-      syncNote.innerHTML = full
+      const newCount = newItems.filter(r => !enrichCache[r.id]).length;
+      const enrichNote = newCount
+        ? (currentToken() ? ` Enriching ${newCount} of them in the background — watch progress up in "Setup & Sync".` : ' Add a token above to auto-enrich new items.')
+        : '';
+      syncNote.innerHTML = (full
         ? `Wantlist rebuilt · <b>${merged.length}</b> items loaded and cached.`
         : (newItems.length
             ? `Wantlist synced · <b>${newItems.length}</b> new item${newItems.length===1?'':'s'} found (now <b>${merged.length}</b> total).`
-            : `No new wantlist items found · still <b>${merged.length}</b> total.`);
+            : `No new wantlist items found · still <b>${merged.length}</b> total.`)) + enrichNote;
       refreshNav(); buildTabs(); updateValueBar(); render();
+      if(newCount) autoEnrichWant();
     }catch(err){
       syncNote.innerHTML = prevNote;
       alert(`Couldn't sync the wantlist: ${err.message}`);
