@@ -2146,18 +2146,11 @@
   }
 
   let enrichPassRunning = false, enrichPassCancelled = false, enrichDone = 0, enrichTotal = 0;
-  async function runEnrichPass(force){
-    if(enrichPassRunning){ enrichPassCancelled = true; return; }
-    if(!currentToken()){
-      const p = el('enrichProgress');
-      if(p) p.textContent = 'Add a personal access token above first.';
-      return;
-    }
-    const items = force ? collection : collection.filter(r => !enrichCache[r.id]);
-    if(force){
-      const ok = await showConfirm(`This re-checks full details for all <b>${collection.length}</b> records, one Discogs request each.`, { title:'Refresh all enrichment data?', confirmLabel:'Refresh all' });
-      if(!ok) return;
-    }
+  // Runs the actual per-item loop against whatever `items` it's handed —
+  // shared by the manual "Enrich my collection" button (all missing, or all
+  // with force) and the post-sync auto-enrich (just the records that sync
+  // pulled in), so the caller decides scope and this just executes it.
+  async function runEnrichLoop(items, force){
     enrichPassRunning = true; enrichPassCancelled = false;
     enrichDone = 0; enrichTotal = items.length;
     updateEnrichButton();
@@ -2177,6 +2170,21 @@
       const p = el('enrichProgress');
       if(p) p.textContent = `Stopped after an error (${enrichDone} checked first): ${erroredMessage}`;
     }
+    return !erroredMessage && !enrichPassCancelled;
+  }
+  async function runEnrichPass(force){
+    if(enrichPassRunning){ enrichPassCancelled = true; return; }
+    if(!currentToken()){
+      const p = el('enrichProgress');
+      if(p) p.textContent = 'Add a personal access token above first.';
+      return;
+    }
+    const items = force ? collection : collection.filter(r => !enrichCache[r.id]);
+    if(force){
+      const ok = await showConfirm(`This re-checks full details for all <b>${collection.length}</b> records, one Discogs request each.`, { title:'Refresh all enrichment data?', confirmLabel:'Refresh all' });
+      if(!ok) return;
+    }
+    await runEnrichLoop(items, force);
   }
   function updateEnrichButton(){
     const btn = el('enrichBtn');
@@ -2190,18 +2198,7 @@
   }
 
   let enrichWantPassRunning = false, enrichWantPassCancelled = false, enrichWantDone = 0, enrichWantTotal = 0;
-  async function runEnrichWantPass(force){
-    if(enrichWantPassRunning){ enrichWantPassCancelled = true; return; }
-    if(!currentToken()){
-      const p = el('enrichWantProgress');
-      if(p) p.textContent = 'Add a personal access token above first.';
-      return;
-    }
-    const items = force ? wantlist : wantlist.filter(r => !enrichCache[r.id]);
-    if(force){
-      const ok = await showConfirm(`This re-checks full details for all <b>${wantlist.length}</b> wantlist records, one Discogs request each.`, { title:'Refresh all wantlist enrichment data?', confirmLabel:'Refresh all' });
-      if(!ok) return;
-    }
+  async function runEnrichWantLoop(items, force){
     enrichWantPassRunning = true; enrichWantPassCancelled = false;
     enrichWantDone = 0; enrichWantTotal = items.length;
     updateEnrichWantButton();
@@ -2221,6 +2218,21 @@
       const p = el('enrichWantProgress');
       if(p) p.textContent = `Stopped after an error (${enrichWantDone} checked first): ${erroredMessage}`;
     }
+    return !erroredMessage && !enrichWantPassCancelled;
+  }
+  async function runEnrichWantPass(force){
+    if(enrichWantPassRunning){ enrichWantPassCancelled = true; return; }
+    if(!currentToken()){
+      const p = el('enrichWantProgress');
+      if(p) p.textContent = 'Add a personal access token above first.';
+      return;
+    }
+    const items = force ? wantlist : wantlist.filter(r => !enrichCache[r.id]);
+    if(force){
+      const ok = await showConfirm(`This re-checks full details for all <b>${wantlist.length}</b> wantlist records, one Discogs request each.`, { title:'Refresh all wantlist enrichment data?', confirmLabel:'Refresh all' });
+      if(!ok) return;
+    }
+    await runEnrichWantLoop(items, force);
   }
   function updateEnrichWantButton(){
     const btn = el('enrichWantBtn');
@@ -2233,25 +2245,38 @@
     updateSetupToggleLabel();
   }
 
-  // Auto-enrichment after a sync: wraps runEnrichPass/runEnrichWantPass so a
-  // sync that lands while a pass is already running re-triggers it afterward
-  // instead of stopping it — calling runEnrichPass directly while it's running
-  // is the "stop" gesture used by the button, which isn't what we want here.
-  let autoEnrichCratePending = false;
-  async function autoEnrichCrate(){
-    if(!currentToken()) return;
-    if(enrichPassRunning){ autoEnrichCratePending = true; return; }
-    autoEnrichCratePending = false;
-    await runEnrichPass(false);
-    if(autoEnrichCratePending) autoEnrichCrate();
+  // Auto-enrichment after a sync: only ever processes the records that
+  // *this* sync just pulled in — never the whole "missing enrichment"
+  // backlog (that's what runEnrichPass/runEnrichWantPass's manual "Enrich"
+  // button is for, and is intentionally not triggered by a full resync).
+  // If a pass is already running, the new records queue up and run in a
+  // follow-up pass right after — calling runEnrichLoop directly while one
+  // is running would just interleave into the same loop's `items`, which
+  // is already snapshotted, so newly-synced records would be silently
+  // dropped instead of enriched.
+  let autoEnrichCrateQueue = [];
+  async function autoEnrichCrate(newItems){
+    autoEnrichCrateQueue.push(...newItems);
+    if(!currentToken() || enrichPassRunning) return;
+    while(autoEnrichCrateQueue.length){
+      const items = autoEnrichCrateQueue.filter(r => !enrichCache[r.id]);
+      autoEnrichCrateQueue = [];
+      if(!items.length) break;
+      const ok = await runEnrichLoop(items, false);
+      if(!ok) break; // stopped by error or user — don't keep draining
+    }
   }
-  let autoEnrichWantPending = false;
-  async function autoEnrichWant(){
-    if(!currentToken()) return;
-    if(enrichWantPassRunning){ autoEnrichWantPending = true; return; }
-    autoEnrichWantPending = false;
-    await runEnrichWantPass(false);
-    if(autoEnrichWantPending) autoEnrichWant();
+  let autoEnrichWantQueue = [];
+  async function autoEnrichWant(newItems){
+    autoEnrichWantQueue.push(...newItems);
+    if(!currentToken() || enrichWantPassRunning) return;
+    while(autoEnrichWantQueue.length){
+      const items = autoEnrichWantQueue.filter(r => !enrichCache[r.id]);
+      autoEnrichWantQueue = [];
+      if(!items.length) break;
+      const ok = await runEnrichWantLoop(items, false);
+      if(!ok) break;
+    }
   }
 
   // ---------- value pass (opt-in background pricing) ----------
@@ -2431,8 +2456,13 @@
       clearState();
       layout.style.display = 'flex';
       searchRow.style.display = 'flex';
+      // Auto-enrichment only follows a regular (delta) sync, where "new" means
+      // the handful of records actually just added on Discogs. A full resync
+      // re-fetches everything, so "missing enrichment" could mean thousands of
+      // records (e.g. right after a cache clear) — that stays a deliberate,
+      // separate step via the Insights tab rather than an automatic side effect.
       const newCount = newItems.filter(r => !enrichCache[r.id]).length;
-      const enrichNote = newCount
+      const enrichNote = (!full && newCount)
         ? (currentToken() ? ` Enriching ${newCount} of them in the background — watch progress up in "Setup & Sync".` : ' Add a token above to auto-enrich new records.')
         : '';
       syncNote.innerHTML = (full
@@ -2445,7 +2475,7 @@
       switchDataset('crate');
       refreshNav(); buildTabs(); updateValueBar(); render();
       if(localStorage.getItem('mycrate:setupCollapsed') === null) setSetupCollapsed(true, false);
-      if(newCount) autoEnrichCrate();
+      if(!full && newCount) autoEnrichCrate(newItems);
     }catch(err){
       showState(`<h2>Couldn't sync the crate</h2><p>${escapeHtml(err.message)}</p>`);
     }finally{
@@ -2486,8 +2516,10 @@
       wantlist = merged;
       await idbSet(wantlistKey(username), { syncedAt: new Date().toISOString(), items: merged });
       localStorage.setItem('mycrate:lastUser', username);
+      // See the matching comment in doSyncCrate: auto-enrichment is a delta-sync-only
+      // side effect, not something a full resync should trigger on its own.
       const newCount = newItems.filter(r => !enrichCache[r.id]).length;
-      const enrichNote = newCount
+      const enrichNote = (!full && newCount)
         ? (currentToken() ? ` Enriching ${newCount} of them in the background — watch progress up in "Setup & Sync".` : ' Add a token above to auto-enrich new items.')
         : '';
       syncNote.innerHTML = (full
@@ -2496,7 +2528,7 @@
             ? `Wantlist synced · <b>${newItems.length}</b> new item${newItems.length===1?'':'s'} found (now <b>${merged.length}</b> total).`
             : `No new wantlist items found · still <b>${merged.length}</b> total.`)) + enrichNote;
       refreshNav(); buildTabs(); updateValueBar(); render();
-      if(newCount) autoEnrichWant();
+      if(!full && newCount) autoEnrichWant(newItems);
     }catch(err){
       syncNote.innerHTML = prevNote;
       alert(`Couldn't sync the wantlist: ${err.message}`);
