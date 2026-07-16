@@ -414,6 +414,7 @@
     padding:14px 16px; background:var(--ink-soft); border:1px solid var(--line-soft); border-radius:var(--radius);
   }
   .gaps-controls .ctrl{ display:flex; flex-direction:column; gap:6px; }
+  .gaps-controls .ctrl .progress{ font-size:11px; color:var(--mustard); font-weight:600; min-height:14px; }
   .gaps-controls label{ font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--line); font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono',monospace; }
   .format-checks{ display:flex; gap:10px; flex-wrap:wrap; }
   .format-checks label{

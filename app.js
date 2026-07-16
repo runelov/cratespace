@@ -1208,6 +1208,7 @@
   let gapFormats = new Set(TARGET_FORMATS);
   let dealPassRunning = false, dealDone = 0, dealTotal = 0;
   let dealPassCancelled = false;
+  let dealStatusMsg = '';
 
   function hasTargetFormat(r, formatSet){
     if(!r.formatDescriptions || !r.formatDescriptions.length) return false;
@@ -1326,6 +1327,7 @@
             <button class="btn small${dealPassRunning ? ' running' : ''}" id="dealPassBtn">${dealPassRunning ? `⏹ Stop (${dealDone} of ${dealTotal})` : 'Check for deals'}</button>
             <button class="btn ghost small" id="dealRefreshBtn">Refresh all</button>
           </div>
+          <div class="progress" id="dealStatus">${dealPassRunning ? `Checking record ${dealDone} of ${dealTotal}…` : dealStatusMsg}</div>
         </div>
         <div class="ctrl">
           <label>Buying from one seller</label>
@@ -1334,8 +1336,8 @@
           </div>
         </div>
         <div class="gaps-note" id="gapsProgress">
-          ${dealPassRunning ? `<b style="color:var(--mustard);">Checking record ${dealDone} of ${dealTotal}…</b>` : `Artists you own <b>${gapMinOwned}+</b> of (in ${TARGET_FORMATS.filter(f=>gapFormats.has(f)).join(', ')||'—'}) with something still on your wantlist.
-          ${missingFormats ? ' Your cached crate predates format tracking — run a <b>Full resync</b> of your crate for accurate results here.' : ''}`}
+          Artists you own <b>${gapMinOwned}+</b> of (in ${TARGET_FORMATS.filter(f=>gapFormats.has(f)).join(', ')||'—'}) with something still on your wantlist.
+          ${missingFormats ? ' Your cached crate predates format tracking — run a <b>Full resync</b> of your crate for accurate results here.' : ''}
         </div>
       </div>`;
 
@@ -1434,7 +1436,9 @@
   async function runDealPass(groups, force){
     if(dealPassRunning){ dealPassCancelled = true; return; }
     if(!currentToken()){
-      el('gapsProgress').innerHTML = 'Add a personal access token above first — pricing data needs it.';
+      dealStatusMsg = 'Add a personal access token above first — pricing data needs it.';
+      const p = el('dealStatus');
+      if(p) p.textContent = dealStatusMsg;
       return;
     }
     const items = groups.flatMap(g=>g.wanted);
@@ -1457,11 +1461,10 @@
       if(dealDone % 8 === 0 && currentView.type === 'gaps') renderGapsView();
     }
     dealPassRunning = false;
+    if(erroredMessage) dealStatusMsg = `Stopped after an error (${dealDone} checked first): ${erroredMessage}`;
+    else if(dealPassCancelled) dealStatusMsg = 'Stopped — click again to resume.';
+    else dealStatusMsg = todo.length ? `Done — checked ${dealDone}.` : 'Nothing new to check — everything visible is already checked.';
     if(currentView.type === 'gaps') renderGapsView();
-    if(erroredMessage){
-      const p = el('gapsProgress');
-      if(p) p.textContent = `Stopped after an error (${dealDone} checked first): ${erroredMessage}`;
-    }
   }
   function updateDealButton(){
     const btn = el('dealPassBtn');
@@ -1469,8 +1472,8 @@
       btn.textContent = dealPassRunning ? `⏹ Stop (${dealDone} of ${dealTotal})` : 'Check for deals';
       btn.classList.toggle('running', dealPassRunning);
     }
-    const p = el('gapsProgress');
-    if(p && dealPassRunning) p.innerHTML = `<b style="color:var(--mustard);">Checking record ${dealDone} of ${dealTotal}…</b>`;
+    const p = el('dealStatus');
+    if(p && dealPassRunning) p.textContent = `Checking record ${dealDone} of ${dealTotal}…`;
   }
 
   // ---------- insights ----------
@@ -1811,7 +1814,7 @@
     const enrichHtml = `
       <div class="enrich-panel">
         <div class="txt">Unlock total playtime, pressing countries, community-obscurity, and hidden-collaborator insights by checking each record's full details (one Discogs request per record, cached afterward — opening a record's modal also does this for free, one at a time).</div>
-        <div class="progress" id="enrichProgress">${enrichPassRunning ? `Checking record ${enrichDone} of ${enrichTotal}…` : ''}</div>
+        <div class="progress" id="enrichProgress">${enrichPassRunning ? `Checking record ${enrichDone} of ${enrichTotal}…` : enrichStatusMsg}</div>
         <button class="btn small${enrichPassRunning ? ' running' : ''}" id="enrichBtn">${enrichPassRunning ? `⏹ Stop (${enrichDone} of ${enrichTotal})` : 'Enrich my collection'}</button>
         <button class="btn ghost small" id="enrichRefreshBtn">Refresh all</button>
       </div>`;
@@ -1908,7 +1911,7 @@
         <h3>Rarest/most wanted in your wantlist</h3>
         <div class="enrich-panel">
           <div class="txt">Check full details for your wantlist (one Discogs request per record, cached afterward — same as collection enrichment above) to rank items by want ÷ have, for records you don't own yet.</div>
-          <div class="progress" id="enrichWantProgress">${enrichWantPassRunning ? `Checking record ${enrichWantDone} of ${enrichWantTotal}…` : ''}</div>
+          <div class="progress" id="enrichWantProgress">${enrichWantPassRunning ? `Checking record ${enrichWantDone} of ${enrichWantTotal}…` : enrichWantStatusMsg}</div>
           <button class="btn small${enrichWantPassRunning ? ' running' : ''}" id="enrichWantBtn">${enrichWantPassRunning ? `⏹ Stop (${enrichWantDone} of ${enrichWantTotal})` : 'Enrich my wantlist'}</button>
           <button class="btn ghost small" id="enrichWantRefreshBtn">Refresh all</button>
         </div>
@@ -2146,6 +2149,7 @@
   }
 
   let enrichPassRunning = false, enrichPassCancelled = false, enrichDone = 0, enrichTotal = 0;
+  let enrichStatusMsg = '';
   // Runs the actual per-item loop against whatever `items` it's handed —
   // shared by the manual "Enrich my collection" button (all missing, or all
   // with force) and the post-sync auto-enrich (just the records that sync
@@ -2164,19 +2168,19 @@
       if(enrichDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
     }
     enrichPassRunning = false;
+    if(erroredMessage) enrichStatusMsg = `Stopped after an error (${enrichDone} checked first): ${erroredMessage}`;
+    else if(enrichPassCancelled) enrichStatusMsg = 'Stopped — click again to resume.';
+    else enrichStatusMsg = items.length ? `Done — checked ${enrichDone}.` : 'Nothing new to check.';
     updateSetupToggleLabel();
     if(currentView.type === 'insights') renderInsightsView();
-    if(erroredMessage){
-      const p = el('enrichProgress');
-      if(p) p.textContent = `Stopped after an error (${enrichDone} checked first): ${erroredMessage}`;
-    }
     return !erroredMessage && !enrichPassCancelled;
   }
   async function runEnrichPass(force){
     if(enrichPassRunning){ enrichPassCancelled = true; return; }
     if(!currentToken()){
+      enrichStatusMsg = 'Add a personal access token above first.';
       const p = el('enrichProgress');
-      if(p) p.textContent = 'Add a personal access token above first.';
+      if(p) p.textContent = enrichStatusMsg;
       return;
     }
     const items = force ? collection : collection.filter(r => !enrichCache[r.id]);
@@ -2198,6 +2202,7 @@
   }
 
   let enrichWantPassRunning = false, enrichWantPassCancelled = false, enrichWantDone = 0, enrichWantTotal = 0;
+  let enrichWantStatusMsg = '';
   async function runEnrichWantLoop(items, force){
     enrichWantPassRunning = true; enrichWantPassCancelled = false;
     enrichWantDone = 0; enrichWantTotal = items.length;
@@ -2212,19 +2217,19 @@
       if(enrichWantDone % 8 === 0 && currentView.type === 'insights') renderInsightsView();
     }
     enrichWantPassRunning = false;
+    if(erroredMessage) enrichWantStatusMsg = `Stopped after an error (${enrichWantDone} checked first): ${erroredMessage}`;
+    else if(enrichWantPassCancelled) enrichWantStatusMsg = 'Stopped — click again to resume.';
+    else enrichWantStatusMsg = items.length ? `Done — checked ${enrichWantDone}.` : 'Nothing new to check.';
     updateSetupToggleLabel();
     if(currentView.type === 'insights') renderInsightsView();
-    if(erroredMessage){
-      const p = el('enrichWantProgress');
-      if(p) p.textContent = `Stopped after an error (${enrichWantDone} checked first): ${erroredMessage}`;
-    }
     return !erroredMessage && !enrichWantPassCancelled;
   }
   async function runEnrichWantPass(force){
     if(enrichWantPassRunning){ enrichWantPassCancelled = true; return; }
     if(!currentToken()){
+      enrichWantStatusMsg = 'Add a personal access token above first.';
       const p = el('enrichWantProgress');
-      if(p) p.textContent = 'Add a personal access token above first.';
+      if(p) p.textContent = enrichWantStatusMsg;
       return;
     }
     const items = force ? wantlist : wantlist.filter(r => !enrichCache[r.id]);
